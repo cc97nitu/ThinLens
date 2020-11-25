@@ -31,15 +31,6 @@ class Element(nn.Module):
 
         return x
 
-    def driftMap(self, length: float, dim: int):
-        # drift = torch.tensor([[1, length, 0, 0], [0, 1, 0, 0], [0, 0, 1, length], [0, 0, 0, 1]], dtype=self.dtype)
-        #
-        # driftMap = nn.Linear(dim, dim, bias=False)
-        # driftMap.weight = nn.Parameter(drift)
-
-        driftMap = DriftMap(length, dim, self.dtype)
-        return driftMap
-
     def rMatrix(self):
         rMatrix = torch.eye(self.dim, dtype=self.dtype)
 
@@ -53,7 +44,7 @@ class Drift(Element):
     def __init__(self, length: float, dim: int, dtype: torch.dtype):
         super(Drift, self).__init__(dim=dim, dtype=dtype)
 
-        self.map = self.driftMap(length, dim)
+        self.map = DriftMap(length, dim, self.dtype)
 
         self.maps = nn.ModuleList([self.map])
         return
@@ -69,29 +60,25 @@ class Quadrupole(Element):
         self.maps = nn.ModuleList()
         for c, d in zip(self.coeffC, self.coeffD):
             if c:
-                self.maps.append(self.driftMap(c * length, dim))
+                self.maps.append(DriftMap(c * length, dim, self.dtype))
             if d:
-                self.maps.append(self.quadMap(length, k1, dim))
+                self.maps.append(QuadKick(length, k1, dim, self.dtype))
 
         return
 
-    def quadMap(self, length: float, k1: float, dim: int):
-        # quad = torch.tensor([[1, 0, 0, 0], [-1 * length * k1, 1, 0, 0], [0, 0, 1, 0], [0, 0, length * k1, 1]], dtype=self.dtype)
-        #
-        # quadMap = nn.Linear(dim, dim, bias=False)
-        # quadMap.weight = nn.Parameter(quad)
-        quadMap = QuadKick(length, k1, dim, self.dtype)
-        return quadMap
-
 
 if __name__ == "__main__":
-    drift = Drift(3)
-    quad = Quadrupole(1, 0.5)
+    dim = 4
+    dtype = torch.float32
+
+    drift = Drift(3, dim=dim, dtype=dtype)
+    quad = Quadrupole(1, 0.3, dim=dim, dtype=dtype)
 
     # create particle
-    x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0],])
+    x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0], ])
 
     # track
-    x = drift(x0)
+    x = quad(x0)
     print(x)
 
+    print(quad.rMatrix())

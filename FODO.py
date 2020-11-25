@@ -107,3 +107,4 @@ if __name__ == "__main__":
     ocelotModel = LinearModel(lattice)
 
     print(ocelotModel(torch.as_tensor(x0, dtype=torch.float32)))
+    print(ocelotModel.oneTurnMap())
