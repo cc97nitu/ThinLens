@@ -18,14 +18,12 @@ perturbedModel = F0D0Model(k1=0.2, dim=dim, dtype=dtype)
 model.requires_grad_(False)
 perturbedModel.requires_grad_(False)
 
-print(model.rMatrix())
-
 # test symplecticity
 sym = torch.tensor([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]], dtype=dtype)
 
-rMatrix = model.rMatrix()
-res = torch.matmul(rMatrix.transpose(1, 0), torch.matmul(sym, rMatrix)) - sym
-print("sym penalty: {}".format(torch.norm(res)))
+# rMatrix = model.rMatrix()
+# res = torch.matmul(rMatrix.transpose(1, 0), torch.matmul(sym, rMatrix)) - sym
+# print("sym penalty: {}".format(torch.norm(res)))
 
 
 # activate gradients on kick maps
@@ -56,12 +54,12 @@ for epoch in range(300):
     if epoch % 10 == 9:
         print(loss.item())
 
-# test symplecticity
-sym = torch.tensor([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]], dtype=dtype)
-
-rMatrix = model.rMatrix()
-print(rMatrix)
-res = lambda x: torch.matmul(x.transpose(1, 0), torch.matmul(sym, x)) - sym
-
-print("sym penalty: {}".format(torch.norm(res(rMatrix))))
+# # test symplecticity
+# sym = torch.tensor([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]], dtype=dtype)
+#
+# rMatrix = model.rMatrix()
+# print(rMatrix)
+# res = lambda x: torch.matmul(x.transpose(1, 0), torch.matmul(sym, x)) - sym
+#
+# print("sym penalty: {}".format(torch.norm(res(rMatrix))))
 

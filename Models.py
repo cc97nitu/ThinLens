@@ -36,7 +36,7 @@ class F0D0Model(nn.Module):
 
 if __name__ == "__main__":
     dtype = torch.double
-    model = F0D0Model(1.3, dtype=dtype)
+    model = F0D0Model(0.3, dtype=dtype)
     model.requires_grad_(False)
 
     # create particle

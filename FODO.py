@@ -4,7 +4,7 @@ import torch
 
 # compare with TorchOcelot
 import sys
-sys.path.append("../TorchOcelot/src")
+sys.path.append("../Tracking/TorchOcelot/src")
 from Simulation.Lattice import DummyLattice
 from Simulation.Models import LinearModel
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     np.set_printoptions(precision=4, suppress=True)
 
     # define FODO
-    k1 = 0.4
+    k1 = 0.3
 
     d1 = Drift(1)
     qf = Quadrupole(1, k1)

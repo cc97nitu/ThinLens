@@ -10,18 +10,14 @@ class DriftMap(nn.Linear):
         drift = torch.tensor([[length, 0], [0, length],], dtype=dtype)
         self.weight = nn.Parameter(drift)
 
-        # identity
-        self.register_buffer("ident", torch.ones(dim // 2, dtype=dtype))
         return
 
     def forward(self, x):
         # get updated position
-        # pos = super().forward(x)
-        pos = super().forward(x[:,[1,3]])
-        pos = pos + self.ident
+        pos = super().forward(x[:,[1,3]])  # feed momenta only
+        pos = pos + x[:,[0,2]]
 
         # update phase space vector
-        # x[:,[0, 2]] = xPos
         xT = x.transpose(1,0)
         posT = pos.transpose(1,0)
 
@@ -41,18 +37,17 @@ class QuadKick(nn.Linear):
         super().__init__(dim, dim // 2, bias=False)
         self.dtype = dtype
 
-        quad = torch.tensor([[-1 * length * k1, 1, 0, 0], [0, 0, length * k1, 1]], dtype=dtype)
-        # quad = torch.tensor([[-1 * length * k1, 0, 1, 0], [0, length * k1, 0, 1]], dtype=dtype)
+        quad = torch.tensor([[-1 * length * k1, 0], [0, length * k1]], dtype=dtype)
+        # quad = torch.tensor([[-1 * length * k1, 1, 0, 0], [0, 0, length * k1, 1]], dtype=dtype)
         self.weight = nn.Parameter(quad)
         return
 
     def forward(self, x):
         # get updated momenta
-        momenta = super().forward(x)
+        momenta = super().forward(x[:,[0,2]])  # feed positions only
+        momenta = momenta + x[:,[1,3]]
 
         # update phase space vector
-        # x[:, [1, 3]] = momenta
-
         xT = x.transpose(1,0)
         momentaT = momenta.transpose(1,0)
 
