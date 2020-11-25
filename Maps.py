@@ -4,17 +4,21 @@ import torch.nn as nn
 
 class DriftMap(nn.Linear):
     def __init__(self, length: float, dim: int, dtype: torch.dtype):
-        super(DriftMap, self).__init__(dim, dim // 2, bias=False)
+        super(DriftMap, self).__init__(dim // 2, dim // 2, bias=False)
         self.dtype = dtype
 
-        drift = torch.tensor([[1, length, 0, 0], [0, 0, 1, length],], dtype=dtype)
-        # drift = torch.tensor([[1, 0, length, 0], [0, 1, 0, length],], dtype=dtype)
+        drift = torch.tensor([[length, 0], [0, length],], dtype=dtype)
         self.weight = nn.Parameter(drift)
+
+        # identity
+        self.register_buffer("ident", torch.ones(dim // 2, dtype=dtype))
         return
 
     def forward(self, x):
         # get updated position
-        pos = super().forward(x)
+        # pos = super().forward(x)
+        pos = super().forward(x[:,[1,3]])
+        pos = pos + self.ident
 
         # update phase space vector
         # x[:,[0, 2]] = xPos
