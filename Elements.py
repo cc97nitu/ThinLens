@@ -5,10 +5,11 @@ from Maps import DriftMap, QuadKick
 
 
 class Element(nn.Module):
-    def __init__(self, dim: int, order=2, dtype=torch.float32):
+    def __init__(self, dim: int, slices: int = 1, order: int = 2, dtype=torch.float32):
         super().__init__()
 
         self.dim = dim
+        self.slices = slices
         self.dtype = dtype
 
         if order == 2:
@@ -41,9 +42,10 @@ class Element(nn.Module):
 
 
 class Drift(Element):
-    def __init__(self, length: float, dim: int, dtype: torch.dtype):
-        super(Drift, self).__init__(dim=dim, dtype=dtype)
+    def __init__(self, length: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+        super(Drift, self).__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
+        # ignore split scheme and slices for increased performance
         self.map = DriftMap(length, dim, self.dtype)
 
         self.maps = nn.ModuleList([self.map])
@@ -54,25 +56,27 @@ class Drift(Element):
 
 
 class Quadrupole(Element):
-    def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
-        super().__init__(dim=dim, dtype=dtype)
+    def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
         self.maps = nn.ModuleList()
-        for c, d in zip(self.coeffC, self.coeffD):
-            if c:
-                self.maps.append(DriftMap(c * length, dim, self.dtype))
-            if d:
-                self.maps.append(QuadKick(length, k1, dim, self.dtype))
+        for slice in range(slices):
+            for c, d in zip(self.coeffC, self.coeffD):
+                if c:
+                    self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
+                if d:
+                    self.maps.append(QuadKick(d * length / slices, k1, dim, self.dtype))
 
         return
 
 
 if __name__ == "__main__":
     dim = 4
+    slices = 1
     dtype = torch.float32
 
-    drift = Drift(3, dim=dim, dtype=dtype)
-    quad = Quadrupole(1, 0.3, dim=dim, dtype=dtype)
+    drift = Drift(3, dim=dim, slices=slices, dtype=dtype)
+    quad = Quadrupole(1, 0.3, dim=dim, slices=slices, dtype=dtype)
 
     # create particle
     x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0], ])

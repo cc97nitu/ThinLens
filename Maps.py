@@ -2,19 +2,24 @@ import torch
 import torch.nn as nn
 
 
-class DriftMap(nn.Linear):
+class DriftMap(nn.Conv1d):
+    """Propagate bunch along drift section."""
     def __init__(self, length: float, dim: int, dtype: torch.dtype):
-        super(DriftMap, self).__init__(dim // 2, dim // 2, bias=False)
+        super().__init__(1, 1, 3, padding=1, bias=False)
+        self.dim = dim
         self.dtype = dtype
 
-        drift = torch.tensor([[length, 0], [0, length], ], dtype=dtype)
-        self.weight = nn.Parameter(drift)
-
+        # set up weights
+        kernel = torch.tensor([[[length, 0, length], ], ], dtype=self.dtype)
+        self.weight = nn.Parameter(kernel)
         return
 
     def forward(self, x):
+        # get momenta in reversed order
+        momenta = x[:, [1, 3]].flip(1).unsqueeze(1)
+
         # get updated position
-        pos = super().forward(x[:, [1, 3]])  # feed momenta only
+        pos = super().forward(momenta).squeeze(1)  # feed momenta only
         pos = pos + x[:, [0, 2]]
 
         # update phase space vector
@@ -29,34 +34,31 @@ class DriftMap(nn.Linear):
         momentaRows = torch.tensor([[0, 1, 0, 0], [0, 0, 0, 1]], dtype=self.dtype)
 
         positionRows = torch.tensor(
-            [[1, self.weight[0, 0], 0, self.weight[0, 1]], [0, self.weight[1, 0], 1, self.weight[1, 1]]],
+            [[1, self.weight[0, 0, 2], 0, self.weight[0, 0, 1]], [0, self.weight[0, 0, 1], 1, self.weight[0, 0, 0]]],
             dtype=self.dtype)
 
         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
 
-class QuadKick(nn.Linear):
+class QuadKick(nn.Conv1d):
+    """Apply a quadrupole kick."""
     def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
-        super().__init__(dim, dim // 2, bias=False)
+        super().__init__(1, 1, 3, padding=1, bias=False)
+        self.dim = dim
         self.dtype = dtype
 
-        quad = torch.tensor([[-1 * length * k1, 0], [0, length * k1]], dtype=dtype)
-        self.weight = nn.Parameter(quad)
-
-        self.conv = nn.Conv1d(1, 1, 3, padding=1, bias=False)
+        # initialize weight
         kernel = torch.tensor([[[length * k1, 0, -1 * length * k1],],], dtype=dtype)
-        # kernel = torch.tensor([[[-1 * length * k1, 0, length * k1],],], dtype=dtype)
-        self.conv.weight = nn.Parameter(kernel)
+        self.weight = nn.Parameter(kernel)
         return
 
     def forward(self, x):
+        # get positions in reversed order
         pos = x[:, [0, 2]].flip(1).unsqueeze(1)
-        momenta = self.conv(pos).squeeze(1)
 
         # get updated momenta
-        # momenta = super().forward(x[:, [0, 2]])  # feed positions only
-
+        momenta = super().forward(pos).squeeze(1)
         momenta = momenta + x[:, [1, 3]]
 
         # update phase space vector
@@ -70,8 +72,10 @@ class QuadKick(nn.Linear):
         positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
 
         momentaRows = torch.tensor(
-            [[self.weight[0, 0], 1, self.weight[0, 1], 0], [self.weight[1, 0], 0, self.weight[1, 1], 1]],
+            [[self.weight[0, 0, 2], 1, self.weight[0, 0, 1], 0], [self.weight[0, 0, 1], 0, self.weight[0, 0, 0], 1]],
             dtype=self.dtype)
 
         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
+
+

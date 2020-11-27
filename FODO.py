@@ -4,7 +4,7 @@ import torch
 
 # compare with TorchOcelot
 import sys
-sys.path.append("../Tracking/TorchOcelot/src")
+sys.path.append("../TorchOcelot/src/")
 from Simulation.Lattice import DummyLattice
 from Simulation.Models import LinearModel
 

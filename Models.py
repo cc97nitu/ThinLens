@@ -5,15 +5,16 @@ import Elements
 
 
 class F0D0Model(nn.Module):
-    def __init__(self, k1: float, dim: int = 4, dtype: torch.dtype = torch.float32):
+    def __init__(self, k1: float, dim: int = 4, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
         super().__init__()
+        self.generalProperties: dict = {"dim": dim, "dtype": dtype, "slices": slices, "order": order}
         self.dim = dim
         self.dtype = dtype
 
-        d1 = Elements.Drift(1, dim=dim, dtype=dtype)
-        qf = Elements.Quadrupole(1, k1, dim=dim, dtype=dtype)
-        d2 = Elements.Drift(2, dim=dim, dtype=dtype)
-        qd = Elements.Quadrupole(1, -k1, dim=dim, dtype=dtype)
+        d1 = Elements.Drift(1, **self.generalProperties)
+        qf = Elements.Quadrupole(1, k1, **self.generalProperties)
+        d2 = Elements.Drift(2, **self.generalProperties)
+        qd = Elements.Quadrupole(1, -k1, **self.generalProperties)
 
         self.elements = nn.ModuleList([d1, qf, d2, qd])
         return
@@ -36,7 +37,7 @@ class F0D0Model(nn.Module):
 
 if __name__ == "__main__":
     dtype = torch.double
-    model = F0D0Model(0.3, dtype=dtype)
+    model = F0D0Model(0.3, slices=3, dtype=dtype)
     model.requires_grad_(False)
 
     # create particle
