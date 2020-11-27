@@ -43,11 +43,20 @@ class QuadKick(nn.Linear):
 
         quad = torch.tensor([[-1 * length * k1, 0], [0, length * k1]], dtype=dtype)
         self.weight = nn.Parameter(quad)
+
+        self.conv = nn.Conv1d(1, 1, 3, padding=1, bias=False)
+        kernel = torch.tensor([[[length * k1, 0, -1 * length * k1],],], dtype=dtype)
+        # kernel = torch.tensor([[[-1 * length * k1, 0, length * k1],],], dtype=dtype)
+        self.conv.weight = nn.Parameter(kernel)
         return
 
     def forward(self, x):
+        pos = x[:, [0, 2]].flip(1).unsqueeze(1)
+        momenta = self.conv(pos).squeeze(1)
+
         # get updated momenta
-        momenta = super().forward(x[:, [0, 2]])  # feed positions only
+        # momenta = super().forward(x[:, [0, 2]])  # feed positions only
+
         momenta = momenta + x[:, [1, 3]]
 
         # update phase space vector

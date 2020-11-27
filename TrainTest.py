@@ -21,9 +21,8 @@ perturbedModel.requires_grad_(False)
 sym = torch.tensor([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]], dtype=dtype)
 
 rMatrix = model.rMatrix()
-print(rMatrix)
 res = torch.matmul(rMatrix.transpose(1, 0), torch.matmul(sym, rMatrix)) - sym
-print("sym penalty: {}".format(torch.norm(res)))
+print("sym penalty before training: {}".format(torch.norm(res)))
 
 # activate gradients on kick maps
 for m in model.modules():
@@ -33,7 +32,7 @@ for m in model.modules():
                 mod.requires_grad_(True)
 
 # train set
-bunch = torch.tensor([[1e-3, 2e-3, 1e-3, 0], ], dtype=dtype)
+bunch = torch.tensor([[1e-3, 2e-3, 1e-3, 0], [-1e-3,1e-3,0,1e-3]], dtype=dtype)
 label = perturbedModel(bunch)
 
 # set up optimizer
@@ -41,7 +40,7 @@ optimizer = optim.Adam(model.parameters())
 criterion = nn.MSELoss()
 
 # train loop
-for epoch in range(300):
+for epoch in range(1000):
     optimizer.zero_grad()
 
     out = model(bunch)
@@ -50,14 +49,23 @@ for epoch in range(300):
     loss.backward()
     optimizer.step()
 
-    if epoch % 10 == 9:
+    if epoch % 20 == 19:
         print(loss.item())
 
 # test symplecticity
 sym = torch.tensor([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]], dtype=dtype)
 
 rMatrix = model.rMatrix()
-print(rMatrix)
 res = lambda x: torch.matmul(x.transpose(1, 0), torch.matmul(sym, x)) - sym
 
-print("sym penalty: {}".format(torch.norm(res(rMatrix))))
+print("sym penalty after training: {}".format(torch.norm(res(rMatrix))))
+
+# look at maps
+print("trained model:")
+quad = model.elements[1]
+print(quad.rMatrix())
+# for m in quad.maps:
+#     print(m.rMatrix())
+
+print("perturbed model first quad:")
+print(perturbedModel.elements[1].rMatrix())

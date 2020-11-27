@@ -47,9 +47,9 @@ if __name__ == "__main__":
     x = model(x0)
     print(x)
 
-    # # test symplecticity
-    # sym = torch.tensor([[0,1,0,0],[-1,0,0,0],[0,0,0,1],[0,0,-1,0]], dtype=dtype)
-    #
-    # rMatrix = model.rMatrix()
-    # res = torch.matmul(rMatrix.transpose(1,0), torch.matmul(sym, rMatrix)) - sym
-    # print("sym penalty: {}".format(torch.norm(res)))
+    # test symplecticity
+    sym = torch.tensor([[0,1,0,0],[-1,0,0,0],[0,0,0,1],[0,0,-1,0]], dtype=dtype)
+
+    rMatrix = model.rMatrix()
+    res = torch.matmul(rMatrix.transpose(1,0), torch.matmul(sym, rMatrix)) - sym
+    print("sym penalty: {}".format(torch.norm(res)))
