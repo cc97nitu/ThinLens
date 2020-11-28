@@ -12,18 +12,7 @@ class Element(nn.Module):
         self.dim = dim
         self.slices = slices
         self.dtype = dtype
-
-        if order == 2:
-            self.coeffC = [1 / 2, 1 / 2]
-            self.coeffD = [1, 0]
-        elif order == 3:
-            self.coeffC = [2 / 3, -2 / 3, 1]
-            self.coeffD = [7 / 24, 3 / 4, -1 / 24]
-        elif order == 4:
-            self.coeffC = [0.6756, 0.411, 0.411, 0.6756]
-            self.coeffD = [0, 0.82898, 0.72991, 0.82898]
-        else:
-            raise NotImplementedError("order {} not implemented".format(order))
+        self.order = order
 
         return
 
@@ -57,8 +46,22 @@ class Drift(Element):
 
 
 class KickElement(Element):
-    def __init__(self, length: float, kickMap: nn.Module, dim: int, slices: int, order: int, dtype: torch.dtype):
+    """Base class for elements consisting of both drift and kicks."""
+    def __init__(self, length: float, kickMap, dim: int, slices: int, order: int, dtype: torch.dtype):
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+
+        # split scheme for hamiltonian
+        if order == 2:
+            self.coeffC = [1 / 2, 1 / 2]
+            self.coeffD = [1, 0]
+        elif order == 3:
+            self.coeffC = [2 / 3, -2 / 3, 1]
+            self.coeffD = [7 / 24, 3 / 4, -1 / 24]
+        elif order == 4:
+            self.coeffC = [0.6756, 0.411, 0.411, 0.6756]
+            self.coeffD = [0, 0.82898, 0.72991, 0.82898]
+        else:
+            raise NotImplementedError("order {} not implemented".format(order))
 
         # same map for each slice
         self.maps = list()
@@ -73,18 +76,12 @@ class KickElement(Element):
         return
 
 
-class SBen(Element):
+class SBen(KickElement):
     """Horizontal sector bending magnet."""
     def __init__(self, length: float, angle: float, dim: int, slices: int, order: int, dtype: torch.dtype, e1: float = 0, e2: float = 0):
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        kickMap = lambda length: DipoleKick(length, angle / slices, dim, dtype)
 
-        self.maps = nn.ModuleList()
-        for slice in range(slices):
-            for c, d in zip(self.coeffC, self.coeffD):
-                if c:
-                    self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
-                if d:
-                    self.maps.append(DipoleKick(d * length / slices, angle / slices, dim, self.dtype))
+        super().__init__(length=length, kickMap=kickMap, dim=dim, slices=slices, order=order, dtype=dtype)
 
         # edges present?
         if e1:
@@ -107,28 +104,11 @@ class RBen(SBen):
         return
 
 
-class Quadrupole(Element):
+class Quadrupole(KickElement):
     def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        kickMap = lambda length: QuadKick(length, k1, dim, self.dtype)
 
-        self.maps = list()
-
-        # # different map for each slice
-        # for slice in range(slices):
-        #     for c, d in zip(self.coeffC, self.coeffD):
-        #         if c:
-        #             self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
-        #         if d:
-        #             self.maps.append(QuadKick(d * length / slices, k1, dim, self.dtype))
-
-        # same map for each slice
-        for c, d in zip(self.coeffC, self.coeffD):
-            if c:
-                self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
-            if d:
-                self.maps.append(QuadKick(d * length / slices, k1, dim, self.dtype))
-
-        self.maps = nn.ModuleList(self.maps * slices)
+        super().__init__(length=length, kickMap=kickMap, dim=dim, slices=slices, order=order, dtype=dtype)
 
         return
 
