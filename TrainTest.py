@@ -7,12 +7,15 @@ import Maps
 from Models import F0D0Model
 
 # general
+torch.set_printoptions(precision=4, sci_mode=False)
+
 dim = 4
+slices = 2
 dtype = torch.double
 
 # set up models
-model = F0D0Model(k1=0.3, dim=dim, dtype=dtype)
-perturbedModel = F0D0Model(k1=0.2, dim=dim, dtype=dtype)
+model = F0D0Model(k1=0.3, slices=slices, dim=dim, dtype=dtype)
+perturbedModel = F0D0Model(k1=0.2, dim=dim, slices=slices, dtype=dtype)
 
 model.requires_grad_(False)
 perturbedModel.requires_grad_(False)

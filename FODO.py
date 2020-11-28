@@ -75,6 +75,7 @@ class QuadrupoleN(object):
 if __name__ == "__main__":
     # pretty print of ndarray
     np.set_printoptions(precision=4, suppress=True)
+    torch.set_printoptions(precision=4, sci_mode=False)
 
     # define FODO
     k1 = 0.3
@@ -103,7 +104,7 @@ if __name__ == "__main__":
     # Ocelot
     print("ocelot")
 
-    lattice = DummyLattice()
+    lattice = DummyLattice(angle=0.1)
     ocelotModel = LinearModel(lattice)
 
     print(ocelotModel(torch.as_tensor(x0, dtype=torch.float32)))

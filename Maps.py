@@ -1,9 +1,11 @@
+import math
 import torch
 import torch.nn as nn
 
 
 class DriftMap(nn.Conv1d):
     """Propagate bunch along drift section."""
+
     def __init__(self, length: float, dim: int, dtype: torch.dtype):
         super().__init__(1, 1, 3, padding=1, bias=False)
         self.dim = dim
@@ -41,16 +43,14 @@ class DriftMap(nn.Conv1d):
         return rMatrix
 
 
-class QuadKick(nn.Conv1d):
-    """Apply a quadrupole kick."""
-    def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
+class KickMap(nn.Conv1d):
+    """Apply an update to momenta."""
+
+    def __init__(self, dim: int, dtype: torch.dtype):
         super().__init__(1, 1, 3, padding=1, bias=False)
         self.dim = dim
         self.dtype = dtype
 
-        # initialize weight
-        kernel = torch.tensor([[[length * k1, 0, -1 * length * k1],],], dtype=dtype)
-        self.weight = nn.Parameter(kernel)
         return
 
     def forward(self, x):
@@ -79,3 +79,44 @@ class QuadKick(nn.Conv1d):
         return rMatrix
 
 
+class QuadKick(KickMap):
+    """Apply a quadrupole kick."""
+
+    def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
+        super().__init__(dim=dim, dtype=dtype)
+
+        # initialize weight
+        kernel = torch.tensor([[[length * k1, 0, -1 * length * k1], ], ], dtype=dtype)
+        self.weight = nn.Parameter(kernel)
+        return
+
+
+class DipoleKick(KickMap):
+    """Apply an horizontal dipole kick."""
+
+    def __init__(self, length: float, angle: float, dim: int, dtype: torch.dtype):
+        super().__init__(dim=dim, dtype=dtype)
+
+        # initialize weight
+        curvature = angle / length
+
+        kernel = torch.tensor([[[0, 0, -1 * curvature ** 2 * length], ], ], dtype=dtype)
+        self.weight = nn.Parameter(kernel)
+
+        return
+
+
+class EdgeKick(KickMap):
+    """Dipole edge effects."""
+
+
+    def __init__(self, length: float, bendAngle: float, edgeAngle: float, dim: int, dtype: torch.dtype):
+        super().__init__(dim=dim, dtype=dtype)
+
+        # initialize weight
+        curvature = bendAngle / length
+
+        kernel = torch.tensor([[[-1 * curvature * math.tan(edgeAngle), 0, curvature * math.tan(edgeAngle)], ], ], dtype=dtype)
+        self.weight = nn.Parameter(kernel)
+
+        return

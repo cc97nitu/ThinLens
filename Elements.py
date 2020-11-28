@@ -1,7 +1,8 @@
+import math
 import torch
 import torch.nn as nn
 
-from Maps import DriftMap, QuadKick
+from Maps import DriftMap, DipoleKick, QuadKick, EdgeKick
 
 
 class Element(nn.Module):
@@ -55,8 +56,26 @@ class Drift(Element):
         return self.map(x)
 
 
-class Quadrupole(Element):
-    def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+class KickElement(Element):
+    def __init__(self, length: float, kickMap: nn.Module, dim: int, slices: int, order: int, dtype: torch.dtype):
+        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+
+        # same map for each slice
+        self.maps = list()
+
+        for c, d in zip(self.coeffC, self.coeffD):
+            if c:
+                self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
+            if d:
+                self.maps.append(kickMap(d * length / slices))
+
+        self.maps = nn.ModuleList(self.maps * slices)
+        return
+
+
+class SBen(Element):
+    """Horizontal sector bending magnet."""
+    def __init__(self, length: float, angle: float, dim: int, slices: int, order: int, dtype: torch.dtype, e1: float = 0, e2: float = 0):
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
         self.maps = nn.ModuleList()
@@ -65,18 +84,63 @@ class Quadrupole(Element):
                 if c:
                     self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
                 if d:
-                    self.maps.append(QuadKick(d * length / slices, k1, dim, self.dtype))
+                    self.maps.append(DipoleKick(d * length / slices, angle / slices, dim, self.dtype))
+
+        # edges present?
+        if e1:
+            self.maps.insert(0, EdgeKick(length, angle, e1, dim, self.dtype))
+
+        if e2:
+            self.maps.append(EdgeKick(length, angle, e2, dim, self.dtype))
+
+        return
+
+
+class RBen(SBen):
+    """Horizontal rectangular bending magnet."""
+    def __init__(self, length: float, angle: float, dim: int, slices: int, order: int, dtype: torch.dtype, e1: float = 0, e2: float = 0):
+        # modify edges
+        e1 += angle / 2
+        e2 += angle / 2
+
+        super().__init__(length, angle, dim, slices, order, dtype, e1=e1, e2=e2)
+        return
+
+
+class Quadrupole(Element):
+    def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+
+        self.maps = list()
+
+        # # different map for each slice
+        # for slice in range(slices):
+        #     for c, d in zip(self.coeffC, self.coeffD):
+        #         if c:
+        #             self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
+        #         if d:
+        #             self.maps.append(QuadKick(d * length / slices, k1, dim, self.dtype))
+
+        # same map for each slice
+        for c, d in zip(self.coeffC, self.coeffD):
+            if c:
+                self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
+            if d:
+                self.maps.append(QuadKick(d * length / slices, k1, dim, self.dtype))
+
+        self.maps = nn.ModuleList(self.maps * slices)
 
         return
 
 
 if __name__ == "__main__":
     dim = 4
+    order = 2
     slices = 1
     dtype = torch.float32
 
-    drift = Drift(3, dim=dim, slices=slices, dtype=dtype)
-    quad = Quadrupole(1, 0.3, dim=dim, slices=slices, dtype=dtype)
+    drift = Drift(3, dim=dim, order=order, slices=slices, dtype=dtype)
+    quad = Quadrupole(1, 0.3, dim=dim, order=order, slices=slices, dtype=dtype)
 
     # create particle
     x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0], ])
