@@ -12,15 +12,56 @@ class Model(nn.Module):
         self.dim = dim
         self.dtype = dtype
 
-        # needs to be set by child classes
+        # log element positions
+        self.positions = list()
+        self.endPositions = list()
+
+        # must be set by child classes
         self.elements = None
+        self.totalLen: float = 0
+
         return
 
-    def forward(self, x):
-        for e in self.elements:
-            x = e(x)
+    def forward(self, x, nTurns:int = 1, outputPerElement: bool = False, outputAtBPM: bool = False):
+        if outputPerElement:
+            outputs = list()
+            for turn in range(nTurns):
+                for e in self.elements:
+                    x = e(x)
+                    outputs.append(x)
 
-        return x
+            return torch.stack(outputs).permute(1, 2, 0)  # particle, dim, element
+        # elif outputAtBPM:
+        #     outputs = list()
+        #     for turn in range(nTurns):
+        #         for m in self.maps:
+        #             x = m(x)
+        #
+        #             if type(m.element) is elements.Monitor:
+        #                 outputs.append(x)
+        #
+        #     return torch.stack(outputs).permute(1, 2, 0)  # particle, dim, element
+        else:
+            for turn in range(nTurns):
+                for e in self.elements:
+                    x = e(x)
+
+            return x
+
+    def logElementPositions(self):
+        """Store beginning and end of each element."""
+        self.positions = list()
+        self.endPositions = list()
+        totalLength = 0
+
+        for element in self.elements:
+            self.positions.append(totalLength)
+            totalLength += element.length
+            self.endPositions.append(totalLength)
+
+        self.totalLen = totalLength
+
+        return
 
     def rMatrix(self):
         """Obtain linear transfer matrix."""
@@ -61,6 +102,7 @@ class F0D0Model(Model):
 
         # add them to the model
         self.elements = nn.ModuleList([d1, qf, d2, qd])
+        self.logElementPositions()
         return
 
 
@@ -75,6 +117,7 @@ class RBendLine(Model):
 
         # beam line
         self.elements = nn.ModuleList([d1, rb1, d2])
+        self.logElementPositions()
         return
 
 
@@ -104,6 +147,7 @@ class SIS18_Cell_minimal(Model):
 
         # beam line
         self.elements = nn.ModuleList(self.cell)
+        self.logElementPositions()
         return
 
 
@@ -145,6 +189,7 @@ class SIS18_Lattice_minimal(Model):
                 flattenedBeamline.append(element)
 
         self.elements = nn.ModuleList(flattenedBeamline)
+        self.logElementPositions()
         return
 
 
@@ -167,7 +212,7 @@ if __name__ == "__main__":
     # x0 = torch.tensor([[1e-3, 1e-3, 2e-3, 0],])  # x, y, xp, yp
 
     # track
-    x = model(x0)
+    x = model(x0, outputPerElement=True)
     print(x)
 
     # test symplecticity

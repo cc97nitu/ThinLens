@@ -19,11 +19,17 @@ bunch = torch.as_tensor(bunch, dtype=dtype)[:,:4]
 bunch = bunch.to(device)
 
 # track
+turns = 10
 print("started tracking")
 t0 = time.time()
 
+x = bunch
 with torch.no_grad():
-    model(bunch)
+    for i in range(turns):
+        x = model(x)
+
+        if i % 50 == 49:
+            print("{}%".format((i + 1) / turns * 100),)
 
 # model(bunch)
 

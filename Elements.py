@@ -34,6 +34,7 @@ class Element(nn.Module):
 class Drift(Element):
     def __init__(self, length: float, dim: int, slices: int, order: int, dtype: torch.dtype):
         super(Drift, self).__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        self.length = length
 
         # ignore split scheme and slices for increased performance
         self.map = DriftMap(length, dim, self.dtype)
@@ -49,6 +50,7 @@ class KickElement(Element):
     """Base class for elements consisting of both drift and kicks."""
     def __init__(self, length: float, kickMap, dim: int, slices: int, order: int, dtype: torch.dtype):
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        self.length = length
 
         # split scheme for hamiltonian
         if order == 2:
