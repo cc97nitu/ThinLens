@@ -2,7 +2,7 @@ import math
 import torch
 import torch.nn as nn
 
-import Elements
+import ThinLens.Elements as Elements
 
 
 class Model(nn.Module):
@@ -22,7 +22,7 @@ class Model(nn.Module):
 
         return
 
-    def forward(self, x, nTurns:int = 1, outputPerElement: bool = False, outputAtBPM: bool = False):
+    def forward(self, x, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False):
         if outputPerElement:
             outputs = list()
             for turn in range(nTurns):
@@ -88,8 +88,6 @@ class Model(nn.Module):
         return [xTune, ]
 
 
-
-
 class F0D0Model(Model):
     def __init__(self, k1: float, dim: int = 4, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
@@ -107,7 +105,8 @@ class F0D0Model(Model):
 
 
 class RBendLine(Model):
-    def __init__(self, angle: float, e1: float, e2: float, dim: int = 4, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
+    def __init__(self, angle: float, e1: float, e2: float, dim: int = 4, slices: int = 1, order: int = 2,
+                 dtype: torch.dtype = torch.float32):
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
         # define beam line
@@ -126,8 +125,10 @@ class SIS18_Cell_minimal(Model):
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
         # specify beam line elements
-        rb1 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354, **self.generalProperties)
-        rb2 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354, **self.generalProperties)
+        rb1 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
+                            **self.generalProperties)
+        rb2 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
+                            **self.generalProperties)
 
         k1f = 3.12391e-01  # tune: 4.2 (whole ring)
         k1d = -4.78047e-01  # tune: 3.3
@@ -152,7 +153,8 @@ class SIS18_Cell_minimal(Model):
 
 
 class SIS18_Lattice_minimal(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1,
+                 order: int = 2, dtype: torch.dtype = torch.float32):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
@@ -208,7 +210,7 @@ if __name__ == "__main__":
     # model = SIS18_Cell_minimal(dtype=dtype)
 
     # create particle
-    x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0],], dtype=dtype)  # x, xp, y, yp
+    x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0], ], dtype=dtype)  # x, xp, y, yp
     # x0 = torch.tensor([[1e-3, 1e-3, 2e-3, 0],])  # x, y, xp, yp
 
     # track
@@ -216,10 +218,10 @@ if __name__ == "__main__":
     print(x)
 
     # test symplecticity
-    sym = torch.tensor([[0,1,0,0],[-1,0,0,0],[0,0,0,1],[0,0,-1,0]], dtype=dtype)
+    sym = torch.tensor([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]], dtype=dtype)
 
     rMatrix = model.rMatrix()
-    res = torch.matmul(rMatrix.transpose(1,0), torch.matmul(sym, rMatrix)) - sym
+    res = torch.matmul(rMatrix.transpose(1, 0), torch.matmul(sym, rMatrix)) - sym
     print("sym penalty: {}".format(torch.norm(res)))
 
     print("tunes: {}".format(model.getTunes()))

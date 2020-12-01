@@ -1,8 +1,7 @@
-import math
 import torch
 import torch.nn as nn
 
-from Maps import DriftMap, DipoleKick, QuadKick, EdgeKick
+from ThinLens.Maps import DriftMap, DipoleKick, QuadKick, EdgeKick
 
 
 class Element(nn.Module):
@@ -48,6 +47,7 @@ class Drift(Element):
 
 class KickElement(Element):
     """Base class for elements consisting of both drift and kicks."""
+
     def __init__(self, length: float, kickMap, dim: int, slices: int, order: int, dtype: torch.dtype):
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
         self.length = length
@@ -80,7 +80,9 @@ class KickElement(Element):
 
 class SBen(KickElement):
     """Horizontal sector bending magnet."""
-    def __init__(self, length: float, angle: float, dim: int, slices: int, order: int, dtype: torch.dtype, e1: float = 0, e2: float = 0):
+
+    def __init__(self, length: float, angle: float, dim: int, slices: int, order: int, dtype: torch.dtype,
+                 e1: float = 0, e2: float = 0):
         kickMap = lambda length: DipoleKick(length, angle / slices, dim, dtype)
 
         super().__init__(length=length, kickMap=kickMap, dim=dim, slices=slices, order=order, dtype=dtype)
@@ -97,7 +99,9 @@ class SBen(KickElement):
 
 class RBen(SBen):
     """Horizontal rectangular bending magnet."""
-    def __init__(self, length: float, angle: float, dim: int, slices: int, order: int, dtype: torch.dtype, e1: float = 0, e2: float = 0):
+
+    def __init__(self, length: float, angle: float, dim: int, slices: int, order: int, dtype: torch.dtype,
+                 e1: float = 0, e2: float = 0):
         # modify edges
         e1 += angle / 2
         e2 += angle / 2

@@ -91,6 +91,46 @@ class QuadKick(KickMap):
         return
 
 
+# class QuadKick(nn.Module):
+#     """Decoupled planes."""
+#
+#     def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
+#         super().__init__()
+#         self.dim = dim
+#         self.dtype = dtype
+#
+#         weight = torch.tensor([-1 * length * k1, length * k1], dtype=dtype)
+#         self.register_parameter("weight", nn.Parameter(weight))
+#
+#
+#         return
+#
+#     def forward(self, x):
+#         # get positions in reversed order
+#         pos = x[:, [0, 2]]
+#
+#         # get updated momenta
+#         momenta = self.weight * pos
+#         momenta = momenta + x[:, [1, 3]]
+#
+#         # update phase space vector
+#         xT = x.transpose(1, 0)
+#         momentaT = momenta.transpose(1, 0)
+#
+#         x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
+#         return x
+#
+#     def rMatrix(self):
+#         positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
+#
+#         momentaRows = torch.tensor(
+#             [[self.weight[0], 1, 0, 0], [0, 0, self.weight[1], 1]],
+#             dtype=self.dtype)
+#
+#         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
+#         return rMatrix
+
+
 class DipoleKick(KickMap):
     """Apply an horizontal dipole kick."""
 
@@ -109,14 +149,32 @@ class DipoleKick(KickMap):
 class EdgeKick(KickMap):
     """Dipole edge effects."""
 
-
     def __init__(self, length: float, bendAngle: float, edgeAngle: float, dim: int, dtype: torch.dtype):
         super().__init__(dim=dim, dtype=dtype)
 
         # initialize weight
         curvature = bendAngle / length
 
-        kernel = torch.tensor([[[-1 * curvature * math.tan(edgeAngle), 0, curvature * math.tan(edgeAngle)], ], ], dtype=dtype)
+        kernel = torch.tensor([[[-1 * curvature * math.tan(edgeAngle), 0, curvature * math.tan(edgeAngle)], ], ],
+                              dtype=dtype)
         self.weight = nn.Parameter(kernel)
 
         return
+
+
+if __name__ == "__main__":
+    dim = 4
+    dtype = torch.double
+
+    # set up quad
+    quad = QuadKick(1, 0.1, dim, dtype)
+
+    # track
+    x = torch.randn(2, dim, dtype=dtype)
+
+    print(x)
+
+    print("standard quad")
+    print(quad(x))
+    print(quad.rMatrix())
+
