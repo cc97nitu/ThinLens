@@ -10,6 +10,7 @@ class DriftMap(nn.Conv1d):
         super().__init__(1, 1, 3, padding=1, bias=False)
         self.dim = dim
         self.dtype = dtype
+        self.length = length
 
         # set up weights
         kernel = torch.tensor([[[length, 0, length], ], ], dtype=self.dtype)
@@ -42,6 +43,20 @@ class DriftMap(nn.Conv1d):
         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
+    def madX(self) -> str:
+        """Express this map via "arbitrary matrix" element from MAD-X."""
+        rMatrix = self.rMatrix()
+
+        elementDefinition = "MATRIX, L={}".format(self.length)
+
+        for i in range(len(rMatrix)):
+            for j in range(len(rMatrix[0])):
+                elementDefinition += ", RM{}{}={}".format(i + 1, j + 1, rMatrix[i, j])
+
+        elementDefinition += ";"
+        return elementDefinition
+
+
 
 class KickMap(nn.Conv1d):
     """Apply an update to momenta."""
@@ -50,6 +65,7 @@ class KickMap(nn.Conv1d):
         super().__init__(1, 1, 3, padding=1, bias=False)
         self.dim = dim
         self.dtype = dtype
+        self.length = 0
 
         return
 
@@ -77,6 +93,20 @@ class KickMap(nn.Conv1d):
 
         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
+
+    def madX(self) -> str:
+        """Express this map via "arbitrary matrix" element from MAD-X."""
+        rMatrix = self.rMatrix()
+
+        elementDefinition = "MATRIX, L=0"
+
+        for i in range(len(rMatrix)):
+            for j in range(len(rMatrix[0])):
+                elementDefinition += ", RM{}{}={}".format(i + 1, j + 1, rMatrix[i, j])
+
+        elementDefinition += ";"
+        return elementDefinition
+
 
 
 class QuadKick(KickMap):
@@ -177,4 +207,5 @@ if __name__ == "__main__":
     print("standard quad")
     print(quad(x))
     print(quad.rMatrix())
+    print(quad.madX())
 

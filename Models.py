@@ -72,6 +72,37 @@ class Model(nn.Module):
 
         return rMatrix
 
+    def madX(self) -> str:
+        """Provide a sequence and necessary templates in order to import this model into Mad-X."""
+        # get templates for every map
+        elementMaps = list()
+
+        identifier = 0
+        for element in self.elements:
+            for m in element.maps:
+                elementMaps.append(tuple([m.length, m.madX(), identifier]))  # (length, madX element template, identifier)
+                identifier += 1
+
+        # create single string containing whole sequence
+        templates = ""
+        sequence = "sis18: sequence, l = {};\n".format(self.totalLen)
+
+        # add templates and elements
+        beginPos = 0  # location of beginning of element (slice) of current map
+        for length, template, identifier in elementMaps:
+            refPos = beginPos + length / 2  # center of element
+
+            templates += "map{}: ".format(identifier) + template + "\n"
+            sequence += "map{}, at={};\n".format(identifier, refPos)
+
+            beginPos += length
+
+        sequence += "\nendsequence;"
+
+        # lattice contains templates and sequence
+        lattice = templates + "\n" + sequence
+        return lattice
+
     def getTunes(self) -> list:
         """Calculate tune from one-turn map."""
         oneTurnMap = self.rMatrix()
@@ -154,13 +185,13 @@ class SIS18_Cell_minimal(Model):
 
 class SIS18_Lattice_minimal(Model):
     def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1,
-                 order: int = 2, dtype: torch.dtype = torch.float32):
+                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
         # quadrupoles shall be sliced more due to their strong influence on tunes
         quadrupoleGeneralProperties = dict(self.generalProperties)
-        quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * 4
+        quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * quadSliceMultiplicity
 
         # SIS18 consists of 12 identical cells
         beamline = list()
