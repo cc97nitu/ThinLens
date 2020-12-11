@@ -186,6 +186,84 @@ class SIS18_Cell_minimal(Model):
         return
 
 
+class SIS18_DoubleCell_minimal(Model):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1,
+                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+        # default values for k1f, k1d correspond to a tune of 4.2, 3.3
+        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+
+        # quadrupoles shall be sliced more due to their strong influence on tunes
+        quadrupoleGeneralProperties = dict(self.generalProperties)
+        quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * quadSliceMultiplicity
+
+        # SIS18 consists of 12 identical cells
+        beamline = list()
+        for i in range(2):
+            # specify beam line elements
+            rb1 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
+                                **self.generalProperties)
+            rb2 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
+                                **self.generalProperties)
+
+            qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **quadrupoleGeneralProperties)
+            qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
+            qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
+
+            d1 = Elements.Drift(0.645, **self.generalProperties)
+            d2 = Elements.Drift(0.9700000000000002, **self.generalProperties)
+            d3 = Elements.Drift(6.839011704000001, **self.generalProperties)
+            d4 = Elements.Drift(0.5999999999999979, **self.generalProperties)
+            d5 = Elements.Drift(0.7097999999999978, **self.generalProperties)
+            d6 = Elements.Drift(0.49979999100000283, **self.generalProperties)
+
+            beamline.append([d1, rb1, d2, rb2, d3, qs1f, d4, qs2d, d5, qs3t, d6])
+
+        # flatten beamline
+        flattenedBeamline = list()
+        for cell in beamline:
+            for element in cell:
+                flattenedBeamline.append(element)
+
+        self.elements = nn.ModuleList(flattenedBeamline)
+        self.logElementPositions()
+        return
+
+
+class SIS18_DoubleCell_minimal_identical(Model):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+        # default values for k1f, k1d correspond to a tune of 4.2, 3.3
+        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+
+        # specify beam line elements
+        rb1 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
+                            **self.generalProperties)
+        rb2 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
+                            **self.generalProperties)
+
+        d1 = Elements.Drift(0.645, **self.generalProperties)
+        d2 = Elements.Drift(0.9700000000000002, **self.generalProperties)
+        d3 = Elements.Drift(6.839011704000001, **self.generalProperties)
+        d4 = Elements.Drift(0.5999999999999979, **self.generalProperties)
+        d5 = Elements.Drift(0.7097999999999978, **self.generalProperties)
+        d6 = Elements.Drift(0.49979999100000283, **self.generalProperties)
+
+        # quadrupoles shall be sliced more due to their strong influence on tunes
+        quadrupoleGeneralProperties = dict(self.generalProperties)
+        quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * quadSliceMultiplicity
+
+        qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **quadrupoleGeneralProperties)
+        qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
+        qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
+
+        # set up beam line
+        self.cell = [d1, rb1, d2, rb2, d3, qs1f, d4, qs2d, d5, qs3t, d6]
+
+        # beam line
+        self.elements = nn.ModuleList(self.cell)
+        self.logElementPositions()
+        return
+
+
 class SIS18_Lattice_minimal(Model):
     def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1,
                  order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
@@ -264,8 +342,8 @@ if __name__ == "__main__":
     import sys
 
     sys.path.append("../TorchOcelot/src/")
-    from Simulation.Lattice import DummyLattice
-    from Simulation.Models import LinearModel
+    from TorchOcelot.Lattice import DummyLattice
+    from TorchOcelot.Models import LinearModel
 
     # Ocelot
     print("ocelot")
