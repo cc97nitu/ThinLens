@@ -152,7 +152,8 @@ class RBendLine(Model):
 
 
 class SIS18_Cell_minimal(Model):
-    def __init__(self, dim: int = 4, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+        # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
 
         # specify beam line elements
@@ -161,18 +162,20 @@ class SIS18_Cell_minimal(Model):
         rb2 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
                             **self.generalProperties)
 
-        k1f = 3.12391e-01  # tune: 4.2 (whole ring)
-        k1d = -4.78047e-01  # tune: 3.3
-        qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **self.generalProperties)
-        qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **self.generalProperties)
-        qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **self.generalProperties)
-
         d1 = Elements.Drift(0.645, **self.generalProperties)
         d2 = Elements.Drift(0.9700000000000002, **self.generalProperties)
         d3 = Elements.Drift(6.839011704000001, **self.generalProperties)
         d4 = Elements.Drift(0.5999999999999979, **self.generalProperties)
         d5 = Elements.Drift(0.7097999999999978, **self.generalProperties)
         d6 = Elements.Drift(0.49979999100000283, **self.generalProperties)
+
+        # quadrupoles shall be sliced more due to their strong influence on tunes
+        quadrupoleGeneralProperties = dict(self.generalProperties)
+        quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * quadSliceMultiplicity
+
+        qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **quadrupoleGeneralProperties)
+        qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
+        qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
 
         # set up beam line
         self.cell = [d1, rb1, d2, rb2, d3, qs1f, d4, qs2d, d5, qs3t, d6]

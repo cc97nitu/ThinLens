@@ -128,6 +128,7 @@ class QuadKick(KickMap):
 #         super().__init__()
 #         self.dim = dim
 #         self.dtype = dtype
+#         self.length = 0.0
 #
 #         weight = torch.tensor([-1 * length * k1, length * k1], dtype=dtype)
 #         self.register_parameter("weight", nn.Parameter(weight))
@@ -159,6 +160,20 @@ class QuadKick(KickMap):
 #
 #         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
 #         return rMatrix
+#
+#     def madX(self) -> str:
+#         """Express this map via "arbitrary matrix" element from MAD-X."""
+#         rMatrix = self.rMatrix()
+#
+#         elementDefinition = "MATRIX, L=0"
+#
+#         for i in range(len(rMatrix)):
+#             for j in range(len(rMatrix[0])):
+#                 elementDefinition += ", RM{}{}={}".format(i + 1, j + 1, rMatrix[i, j])
+#
+#         elementDefinition += ";"
+#         return elementDefinition
+
 
 
 class DipoleKick(KickMap):
