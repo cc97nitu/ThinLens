@@ -45,6 +45,10 @@ class Drift(Element):
         return self.map(x)
 
 
+class Monitor(Drift):
+    """Special drift."""
+
+
 class KickElement(Element):
     """Base class for elements consisting of both drift and kicks."""
 
