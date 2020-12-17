@@ -15,9 +15,12 @@ class DriftMap(nn.Conv1d):
         # set up weights
         kernel = torch.tensor([[[length, 0, length], ], ], dtype=self.dtype)
         self.weight = nn.Parameter(kernel)
+
+        #
+        self.forward = self.forward4D
         return
 
-    def forward(self, x):
+    def forward4D(self, x):
         # get momenta in reversed order
         momenta = x[:, [1, 3]].flip(1).unsqueeze(1)
 
