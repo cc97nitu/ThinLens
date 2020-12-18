@@ -223,7 +223,7 @@ class EdgeKick(Map):
         # initialize weight
         curvature = bendAngle / length
 
-        kernel = torch.tensor([[-1 * curvature * math.tan(edgeAngle), curvature * math.tan(edgeAngle)], ], dtype=dtype)
+        kernel = torch.tensor([[curvature * math.tan(edgeAngle), -1 * curvature * math.tan(edgeAngle)], ], dtype=dtype)
         self.weight = nn.Parameter(kernel)
 
         if dim == 4:
