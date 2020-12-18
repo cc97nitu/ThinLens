@@ -3,13 +3,33 @@ import torch
 import torch.nn as nn
 
 
-class DriftMap(nn.Module):
-    """Propagate bunch along drift section."""
-
-    def __init__(self, length: float, dim: int, dtype: torch.dtype):
+class Map(nn.Module):
+    def __init__(self, dim: int, dtype: torch.dtype):
         super().__init__()
         self.dim = dim
         self.dtype = dtype
+        self.length = 0.0
+        return
+
+    def madX(self) -> str:
+        """Express this map via "arbitrary matrix" element from MAD-X."""
+        rMatrix = self.rMatrix()
+
+        elementDefinition = "MATRIX, L={}".format(self.length)
+
+        for i in range(len(rMatrix)):
+            for j in range(len(rMatrix[0])):
+                elementDefinition += ", RM{}{}={}".format(i + 1, j + 1, rMatrix[i, j])
+
+        elementDefinition += ";"
+        return elementDefinition
+
+
+class DriftMap(Map):
+    """Propagate bunch along drift section."""
+
+    def __init__(self, length: float, dim: int, dtype: torch.dtype):
+        super().__init__(dim, dtype)
         self.length = length
 
         if dim == 4:
@@ -34,20 +54,20 @@ class DriftMap(nn.Module):
         momenta = x[:, [1, 3]]
 
         # get updated momenta
-        pos = self.weight * momenta
+        pos = self.length * momenta
         pos = pos + x[:, [0, 2]]
 
         # update phase space vector
         xT = x.transpose(1, 0)
         posT = pos.transpose(1, 0)
 
-        x = torch.stack([posT[0], xT[0], posT[1], xT[1]], ).transpose(1, 0)
+        x = torch.stack([posT[0], xT[1], posT[1], xT[3]], ).transpose(1, 0)
 
         return x
 
     def forward6D(self, x):
         # get momenta
-        momenta = x[:, [1, 3,]]
+        momenta = x[:, [1, 3, ]]
         velocityRatio = x[:, 8]
 
         # get updated momenta
@@ -60,8 +80,7 @@ class DriftMap(nn.Module):
         xT = x.transpose(1, 0)
         posT = pos.transpose(1, 0)
 
-        x = torch.stack([posT[0], xT[0], posT[2], xT[1], sigma, xT[5], xT[6], xT[7], xT[8]],).transpose(1, 0)
-
+        x = torch.stack([posT[0], xT[1], posT[1], xT[3], sigma, *xT[5:]], ).transpose(1, 0)
         return x
 
     def rMatrix(self):
@@ -74,91 +93,12 @@ class DriftMap(nn.Module):
         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
-    def madX(self) -> str:
-        """Express this map via "arbitrary matrix" element from MAD-X."""
-        rMatrix = self.rMatrix()
 
-        elementDefinition = "MATRIX, L={}".format(self.length)
-
-        for i in range(len(rMatrix)):
-            for j in range(len(rMatrix[0])):
-                elementDefinition += ", RM{}{}={}".format(i + 1, j + 1, rMatrix[i, j])
-
-        elementDefinition += ";"
-        return elementDefinition
-
-
-
-class KickMap(nn.Conv1d):
-    """Apply an update to momenta."""
-
-    def __init__(self, dim: int, dtype: torch.dtype):
-        super().__init__(1, 1, 3, padding=1, bias=False)
-        self.dim = dim
-        self.dtype = dtype
-        self.length = 0
-
-        return
-
-    def forward(self, x):
-        # get positions in reversed order
-        pos = x[:, [0, 2]].flip(1).unsqueeze(1)
-
-        # get updated momenta
-        momenta = super().forward(pos).squeeze(1)
-        momenta = momenta + x[:, [1, 3]]
-
-        # update phase space vector
-        xT = x.transpose(1, 0)
-        momentaT = momenta.transpose(1, 0)
-
-        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
-        return x
-
-    def rMatrix(self):
-        positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
-
-        momentaRows = torch.tensor(
-            [[self.weight[0, 0, 2], 1, self.weight[0, 0, 1], 0], [self.weight[0, 0, 1], 0, self.weight[0, 0, 0], 1]],
-            dtype=self.dtype)
-
-        rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
-        return rMatrix
-
-    def madX(self) -> str:
-        """Express this map via "arbitrary matrix" element from MAD-X."""
-        rMatrix = self.rMatrix()
-
-        elementDefinition = "MATRIX, L=0"
-
-        for i in range(len(rMatrix)):
-            for j in range(len(rMatrix[0])):
-                elementDefinition += ", RM{}{}={}".format(i + 1, j + 1, rMatrix[i, j])
-
-        elementDefinition += ";"
-        return elementDefinition
-
-
-
-# class QuadKick(KickMap):
-#     """Apply a quadrupole kick."""
-#
-#     def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
-#         super().__init__(dim=dim, dtype=dtype)
-#
-#         # initialize weight
-#         kernel = torch.tensor([[[length * k1, 0, -1 * length * k1], ], ], dtype=dtype)
-#         self.weight = nn.Parameter(kernel)
-#         return
-
-
-class QuadKick(nn.Module):
+class QuadKick(Map):
     """Decoupled planes."""
 
     def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
-        super().__init__()
-        self.dim = dim
-        self.dtype = dtype
+        super().__init__(dim, dtype)
         self.length = 0.0
 
         weight = torch.tensor([-1 * length * k1, length * k1], dtype=dtype)
@@ -167,7 +107,7 @@ class QuadKick(nn.Module):
         if dim == 4:
             self.forward = self.forward4D
         elif dim == 6:
-            pass
+            self.forward = self.forward6D
         else:
             raise NotImplementedError("dim {} not supported".format(dim))
 
@@ -191,7 +131,7 @@ class QuadKick(nn.Module):
     def forward6D(self, x):
         # get positions
         pos = x[:, [0, 2]]
-        invDelta = x[:, 7]
+        invDelta = x[:, 7].unsqueeze(1)
 
         # get updated momenta
         momenta = self.weight * invDelta * pos
@@ -201,7 +141,7 @@ class QuadKick(nn.Module):
         xT = x.transpose(1, 0)
         momentaT = momenta.transpose(1, 0)
 
-        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
+        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1], *xT[4:]]).transpose(1, 0)
         return x
 
     def rMatrix(self):
@@ -214,22 +154,8 @@ class QuadKick(nn.Module):
         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
-    def madX(self) -> str:
-        """Express this map via "arbitrary matrix" element from MAD-X."""
-        rMatrix = self.rMatrix()
 
-        elementDefinition = "MATRIX, L=0"
-
-        for i in range(len(rMatrix)):
-            for j in range(len(rMatrix[0])):
-                elementDefinition += ", RM{}{}={}".format(i + 1, j + 1, rMatrix[i, j])
-
-        elementDefinition += ";"
-        return elementDefinition
-
-
-
-class DipoleKick(KickMap):
+class DipoleKick(Map):
     """Apply an horizontal dipole kick."""
 
     def __init__(self, length: float, angle: float, dim: int, dtype: torch.dtype):
@@ -238,13 +164,57 @@ class DipoleKick(KickMap):
         # initialize weight
         curvature = angle / length
 
-        kernel = torch.tensor([[[0, 0, -1 * curvature ** 2 * length], ], ], dtype=dtype)
-        self.weight = nn.Parameter(kernel)
+        if dim == 4:
+            kernel = torch.tensor([-1 * curvature ** 2 * length], dtype=dtype)
+            self.weight = nn.Parameter(kernel)
+
+            self.forward = self.forward4D
+        elif dim == 6:
+            kernel = torch.tensor([[-1 * curvature ** 2 * length, curvature * length, curvature], ], dtype=dtype)
+            self.weight = nn.Parameter(kernel)
+
+            self.forward = self.forward6D
+        else:
+            raise NotImplementedError("dim {} not supported".format(dim))
 
         return
 
+    def forward4D(self, x):
+        # get horizontal position
+        pos = x[:, 0]
 
-class EdgeKick(KickMap):
+        # get updated momenta
+        momenta = self.weight * pos
+        momenta = momenta + x[:, 1]
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+
+        x = torch.stack([xT[0], momenta, xT[2], xT[3]], ).transpose(1, 0)
+        return x
+
+    def forward6D(self, x):
+        # get x and sigma
+        pos = x[:, [0, 4]]
+
+        delta = x[:, 6]
+        velocityRatio = x[:, 8]
+
+        # get updates
+        px = self.weight[0] * pos[0] + self.weight[1] * delta
+        px = x[1] + px
+
+        sigma = -1 * self.weight[1] * velocityRatio
+        sigma = x[4] + sigma
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+
+        x = torch.stack([xT[0], px, xT[2], xT[3], sigma, *xT[5:]]).transpose(1, 0)
+        return x
+
+
+class EdgeKick(Map):
     """Dipole edge effects."""
 
     def __init__(self, length: float, bendAngle: float, edgeAngle: float, dim: int, dtype: torch.dtype):
@@ -253,11 +223,32 @@ class EdgeKick(KickMap):
         # initialize weight
         curvature = bendAngle / length
 
-        kernel = torch.tensor([[[-1 * curvature * math.tan(edgeAngle), 0, curvature * math.tan(edgeAngle)], ], ],
-                              dtype=dtype)
+        kernel = torch.tensor([[-1 * curvature * math.tan(edgeAngle), curvature * math.tan(edgeAngle)], ], dtype=dtype)
         self.weight = nn.Parameter(kernel)
 
+        if dim == 4:
+            self.forward = self.forward4D
+        elif dim == 6:
+            self.forward = self.forward6D
+        else:
+            raise NotImplementedError("dim {} not supported".format(dim))
+
         return
+
+    def forward4D(self, x):
+        # get positions
+        pos = x[:, [0, 2]]
+
+        # get updated momenta
+        momenta = self.weight * pos
+        momenta = momenta + x[:, [1, 3]]
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+        momentaT = momenta.transpose(1, 0)
+
+        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
+        return x
 
 
 if __name__ == "__main__":
