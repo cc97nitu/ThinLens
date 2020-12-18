@@ -3,17 +3,17 @@ import torch
 import torch.nn as nn
 
 
-class DriftMap(nn.Conv1d):
+class DriftMap(nn.Module):
     """Propagate bunch along drift section."""
 
     def __init__(self, length: float, dim: int, dtype: torch.dtype):
-        super().__init__(1, 1, 3, padding=1, bias=False)
+        super().__init__()
         self.dim = dim
         self.dtype = dtype
         self.length = length
 
         # set up weights
-        kernel = torch.tensor([[[length, 0, length], ], ], dtype=self.dtype)
+        kernel = torch.tensor([self.length, self.length], dtype=self.dtype)
         self.weight = nn.Parameter(kernel)
 
         #
@@ -21,18 +21,18 @@ class DriftMap(nn.Conv1d):
         return
 
     def forward4D(self, x):
-        # get momenta in reversed order
-        momenta = x[:, [1, 3]].flip(1).unsqueeze(1)
+        # get momenta
+        momenta = x[:, [1, 3]]
 
-        # get updated position
-        pos = super().forward(momenta).squeeze(1)  # feed momenta only
+        # get updated momenta
+        pos = self.weight * momenta
         pos = pos + x[:, [0, 2]]
 
         # update phase space vector
         xT = x.transpose(1, 0)
         posT = pos.transpose(1, 0)
 
-        x = torch.stack([posT[0], xT[1], posT[1], xT[3]], ).transpose(1, 0)
+        x = torch.stack([posT[0], xT[0], posT[2], xT[1]], ).transpose(1, 0)
 
         return x
 
@@ -40,7 +40,7 @@ class DriftMap(nn.Conv1d):
         momentaRows = torch.tensor([[0, 1, 0, 0], [0, 0, 0, 1]], dtype=self.dtype)
 
         positionRows = torch.tensor(
-            [[1, self.weight[0, 0, 2], 0, self.weight[0, 0, 1]], [0, self.weight[0, 0, 1], 1, self.weight[0, 0, 0]]],
+            [[1, self.weight[0], 0, 0], [0, 0, 1, self.weight[1]]],
             dtype=self.dtype)
 
         rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
