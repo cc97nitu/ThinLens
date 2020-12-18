@@ -12,12 +12,21 @@ class DriftMap(nn.Module):
         self.dtype = dtype
         self.length = length
 
-        # set up weights
-        kernel = torch.tensor([self.length, self.length], dtype=self.dtype)
-        self.weight = nn.Parameter(kernel)
+        if dim == 4:
+            # set up weights
+            kernel = torch.tensor([self.length, self.length], dtype=self.dtype)
+            self.weight = nn.Parameter(kernel)
 
-        #
-        self.forward = self.forward4D
+            self.forward = self.forward4D
+        elif dim == 6:
+            # set up weights
+            kernel = torch.tensor([self.length, self.length], dtype=self.dtype)
+            self.weight = nn.Parameter(kernel)
+
+            self.forward = self.forward6D
+        else:
+            raise NotImplementedError("dim {} not supported".format(dim))
+
         return
 
     def forward4D(self, x):
@@ -32,7 +41,26 @@ class DriftMap(nn.Module):
         xT = x.transpose(1, 0)
         posT = pos.transpose(1, 0)
 
-        x = torch.stack([posT[0], xT[0], posT[2], xT[1]], ).transpose(1, 0)
+        x = torch.stack([posT[0], xT[0], posT[1], xT[1]], ).transpose(1, 0)
+
+        return x
+
+    def forward6D(self, x):
+        # get momenta
+        momenta = x[:, [1, 3,]]
+        velocityRatio = x[:, 8]
+
+        # get updated momenta
+        pos = self.weight * momenta
+        sigma = self.length - self.length * velocityRatio
+        pos = pos + x[:, [0, 2]]
+        sigma = sigma + x[:, 4]
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+        posT = pos.transpose(1, 0)
+
+        x = torch.stack([posT[0], xT[0], posT[2], xT[1], sigma, xT[5], xT[6], xT[7], xT[8]],).transpose(1, 0)
 
         return x
 
@@ -136,15 +164,37 @@ class QuadKick(nn.Module):
         weight = torch.tensor([-1 * length * k1, length * k1], dtype=dtype)
         self.register_parameter("weight", nn.Parameter(weight))
 
+        if dim == 4:
+            self.forward = self.forward4D
+        elif dim == 6:
+            pass
+        else:
+            raise NotImplementedError("dim {} not supported".format(dim))
 
         return
 
-    def forward(self, x):
+    def forward4D(self, x):
         # get positions in reversed order
         pos = x[:, [0, 2]]
 
         # get updated momenta
         momenta = self.weight * pos
+        momenta = momenta + x[:, [1, 3]]
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+        momentaT = momenta.transpose(1, 0)
+
+        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
+        return x
+
+    def forward6D(self, x):
+        # get positions
+        pos = x[:, [0, 2]]
+        invDelta = x[:, 7]
+
+        # get updated momenta
+        momenta = self.weight * invDelta * pos
         momenta = momenta + x[:, [1, 3]]
 
         # update phase space vector
