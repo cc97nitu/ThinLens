@@ -84,13 +84,15 @@ class DriftMap(Map):
         return x
 
     def rMatrix(self):
-        momentaRows = torch.tensor([[0, 1, 0, 0], [0, 0, 0, 1]], dtype=self.dtype)
+        if self.dim == 4:
+            rMatrix = torch.eye(4, dtype=self.dtype)
+            rMatrix[0, 1] = self.weight[0]
+            rMatrix[2, 3] = self.weight[1]
+        else:
+            rMatrix = torch.eye(6, dtype=self.dtype)
+            rMatrix[0, 1] = self.weight[0]
+            rMatrix[2, 3] = self.weight[1]
 
-        positionRows = torch.tensor(
-            [[1, self.weight[0], 0, 0], [0, 0, 1, self.weight[1]]],
-            dtype=self.dtype)
-
-        rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
 
@@ -145,13 +147,15 @@ class QuadKick(Map):
         return x
 
     def rMatrix(self):
-        positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
+        if self.dim == 4:
+            rMatrix = torch.eye(4, dtype=self.dtype)
+            rMatrix[1, 0] = self.weight[0]
+            rMatrix[3, 2] = self.weight[1]
+        else:
+            rMatrix = torch.eye(6, dtype=self.dtype)
+            rMatrix[1, 0] = self.weight[0]
+            rMatrix[3, 2] = self.weight[1]
 
-        momentaRows = torch.tensor(
-            [[self.weight[0], 1, 0, 0], [0, 0, self.weight[1], 1]],
-            dtype=self.dtype)
-
-        rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
 
@@ -170,7 +174,7 @@ class DipoleKick(Map):
 
             self.forward = self.forward4D
         elif dim == 6:
-            kernel = torch.tensor([-1 * curvature ** 2 * length, curvature * length,], dtype=dtype)
+            kernel = torch.tensor([-1 * curvature ** 2 * length, -1 * curvature * length,], dtype=dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward6D
@@ -201,11 +205,11 @@ class DipoleKick(Map):
         velocityRatio = x[:, 8]
 
         # get updates
-        px = self.weight[0] * pos[0] + self.weight[1] * delta
-        px = x[1] + px
+        px = self.weight[0] * pos[:, 0] + -1 * self.weight[1] * delta
+        px = x[:, 1] + px
 
-        sigma = -1 * self.weight[1] * velocityRatio
-        sigma = x[4] + sigma
+        sigma = self.weight[1] * velocityRatio
+        sigma = x[:, 4] + sigma
 
         # update phase space vector
         xT = x.transpose(1, 0)
@@ -214,13 +218,14 @@ class DipoleKick(Map):
         return x
 
     def rMatrix(self):
-        positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
+        if self.dim == 4:
+            rMatrix = torch.eye(4, dtype=self.dtype)
+            rMatrix[1, 0] = self.weight[0]
+        else:
+            rMatrix = torch.eye(6, dtype=self.dtype)
+            rMatrix[1, 0] = self.weight[0]
+            rMatrix[4, 0] = self.weight[1]
 
-        momentaRows = torch.tensor(
-            [[self.weight[0], 1, 0, 0], [0, 0, 0, 1]],
-            dtype=self.dtype)
-
-        rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
 
@@ -233,7 +238,7 @@ class EdgeKick(Map):
         # initialize weight
         curvature = bendAngle / length
 
-        kernel = torch.tensor([curvature * math.tan(edgeAngle), -1 * curvature * math.tan(edgeAngle)], dtype=dtype)
+        kernel = torch.tensor([curvature * math.tan(edgeAngle), -1 * curvature * math.tan(edgeAngle), curvature * length], dtype=dtype)
         self.weight = nn.Parameter(kernel)
 
         if dim == 4:
@@ -250,7 +255,7 @@ class EdgeKick(Map):
         pos = x[:, [0, 2]]
 
         # get updated momenta
-        momenta = self.weight * pos
+        momenta = self.weight[:2] * pos
         momenta = momenta + x[:, [1, 3]]
 
         # update phase space vector
@@ -260,20 +265,42 @@ class EdgeKick(Map):
         x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
         return x
 
+    def forward6D(self, x):
+        # get positions
+        pos = x[:, [0, 2]]
+        velocityRatio = x[:, 8]
+
+        # get updated momenta
+        momenta = self.weight[:2] * pos
+        momenta = momenta + x[:, [1, 3]]
+
+        # sigma = -1 * velocityRatio * pos[0] * self.weight[2]
+        # sigma = sigma + x[:, 4]
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+        momentaT = momenta.transpose(1, 0)
+
+        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1], *xT[4:],]).transpose(1, 0)
+        return x
+
+
     def rMatrix(self):
-        positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
+        if self.dim == 4:
+            rMatrix = torch.eye(4, dtype=self.dtype)
+            rMatrix[1, 0] = self.weight[0]
+            rMatrix[3, 2] = self.weight[1]
+        else:
+            rMatrix = torch.eye(6, dtype=self.dtype)
+            rMatrix[1, 0] = self.weight[0]
+            rMatrix[3, 2] = self.weight[1]
 
-        momentaRows = torch.tensor(
-            [[self.weight[0], 1, 0, 0], [0, 0, self.weight[1], 1]],
-            dtype=self.dtype)
-
-        rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
         return rMatrix
 
 
 
 if __name__ == "__main__":
-    dim = 4
+    dim = 6
     dtype = torch.double
 
     # set up quad
@@ -282,10 +309,7 @@ if __name__ == "__main__":
     # track
     x = torch.randn(2, dim, dtype=dtype)
 
-    print(x)
-
-    print("standard quad")
-    print(quad(x))
+    # matrix
+    print("rMatrix")
     print(quad.rMatrix())
-    print(quad.madX())
 

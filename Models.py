@@ -370,7 +370,7 @@ class SIS18_Lattice_minimal(Model):
 
 class SIS18_Lattice(Model):
     def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1,
-                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32, cellsIdentical: bool = False):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
         self.quadSliceMultiplicity = quadSliceMultiplicity
@@ -381,7 +381,7 @@ class SIS18_Lattice(Model):
 
         # SIS18 consists of 12 identical cells
         beamline = list()
-        for i in range(12):
+        if cellsIdentical:
             # specify beam line elements
             rb1a = Elements.RBen(length=2.617993878 / 2, angle=0.2617993878 / 2, e1=0.1274090354, e2=0,
                                  **self.generalProperties)
@@ -422,9 +422,58 @@ class SIS18_Lattice(Model):
             qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
             qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
 
-            beamline.append(
-                [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c, d5b,
-                 qs3t, d6a, hMon, vMon, d6b])
+            for i in range(12):
+                beamline.append(
+                    [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c,
+                     d5b,
+                     qs3t, d6a, hMon, vMon, d6b])
+
+        else:
+            for i in range(12):
+                # specify beam line elements
+                rb1a = Elements.RBen(length=2.617993878 / 2, angle=0.2617993878 / 2, e1=0.1274090354, e2=0,
+                                     **self.generalProperties)
+                rb1b = Elements.RBen(length=2.617993878 / 2, angle=0.2617993878 / 2, e1=0, e2=0.1274090354,
+                                     **self.generalProperties)
+                rb2a = Elements.RBen(length=2.617993878 / 2, angle=0.2617993878 / 2, e1=0.1274090354, e2=0,
+                                     **self.generalProperties)
+                rb2b = Elements.RBen(length=2.617993878 / 2, angle=0.2617993878 / 2, e1=0, e2=0.1274090354,
+                                     **self.generalProperties)
+
+                # one day there will be sextupoles
+                ks1c = Elements.Drift(length=0.32, **self.generalProperties)
+                ks3c = Elements.Drift(length=0.32, **self.generalProperties)
+
+                # one day there will be correctors
+                hKick1 = Elements.Drift(0, **self.generalProperties)
+                hKick2 = Elements.Drift(0, **self.generalProperties)
+                vKick = Elements.Drift(0, **self.generalProperties)
+
+                hMon = Elements.Monitor(0.13275, **self.generalProperties)
+                vMon = Elements.Monitor(0.13275, **self.generalProperties)
+
+                d1 = Elements.Drift(0.2, **self.generalProperties)
+                d2 = Elements.Drift(0.9700000000000002, **self.generalProperties)
+                d3a = Elements.Drift(6.345, **self.generalProperties)
+                d3b = Elements.Drift(0.175, **self.generalProperties)
+                d4 = Elements.Drift(0.5999999999999979, **self.generalProperties)
+                d5a = Elements.Drift(0.195, **self.generalProperties)
+                d5b = Elements.Drift(0.195, **self.generalProperties)
+                d6a = Elements.Drift(0.3485, **self.generalProperties)
+                d6b = Elements.Drift(0.3308, **self.generalProperties)
+
+                # quadrupoles shall be sliced more due to their strong influence on tunes
+                quadrupoleGeneralProperties = dict(self.generalProperties)
+                quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * self.quadSliceMultiplicity
+
+                qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **quadrupoleGeneralProperties)
+                qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
+                qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
+
+                beamline.append(
+                    [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c,
+                     d5b,
+                     qs3t, d6a, hMon, vMon, d6b])
 
         # flatten beamline
         flattenedBeamline = list()
@@ -438,48 +487,29 @@ class SIS18_Lattice(Model):
 
 
 if __name__ == "__main__":
+    import ThinLens.Maps
+
     torch.set_printoptions(precision=4, sci_mode=True)
 
     dtype = torch.double
 
-    angle = 0.2
-    e1 = 0.1
-    e2 = 0.1
-    # model = RBendLine(angle, e1=e1, e2=e2, slices=5, dtype=dtype)
-    # model.requires_grad_(False)
+    # set up models
+    mod1 = SIS18_Lattice(dtype=dtype, cellsIdentical=True)
 
-    model = SIS18_Lattice_minimal(slices=4, dtype=dtype)
-    # model = SIS18_Cell_minimal(dtype=dtype)
+    # activate gradients on kick maps
+    mod1.requires_grad_(False)
 
-    # create particle
-    x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0], ], dtype=dtype)  # x, xp, y, yp
-    # x0 = torch.tensor([[1e-3, 1e-3, 2e-3, 0],])  # x, y, xp, yp
+    for m in mod1.modules():
+        if type(m) is Elements.Quadrupole:
+            for mod in m.modules():
+                if type(mod) is ThinLens.Maps.QuadKick:
+                    mod.requires_grad_(True)
 
-    # track
-    x = model(x0, outputPerElement=True)
-    print(x)
 
-    # test symplecticity
-    sym = torch.tensor([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]], dtype=dtype)
+    # count trainable parameters
+    parametersMod1 = list()
+    for parameter in mod1.parameters():
+        if parameter.requires_grad:
+            parametersMod1.append(parameter)
 
-    rMatrix = model.rMatrix()
-    res = torch.matmul(rMatrix.transpose(1, 0), torch.matmul(sym, rMatrix)) - sym
-    print("sym penalty: {}".format(torch.norm(res)))
-
-    print("tunes: {}".format(model.getTunes()))
-
-    ############ compare with TorchOcelot
-    import sys
-
-    sys.path.append("../TorchOcelot/src/")
-    from TorchOcelot.Lattice import DummyLattice
-    from TorchOcelot.Models import LinearModel
-
-    # Ocelot
-    print("ocelot")
-
-    lattice = DummyLattice(angle=angle, e1=e1, e2=e2)
-    ocelotModel = LinearModel(lattice)
-
-    print(ocelotModel(torch.as_tensor(x0, dtype=torch.float32)))
-    print(ocelotModel.oneTurnMap())
+    print(len(parametersMod1))
