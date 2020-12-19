@@ -170,7 +170,7 @@ class DipoleKick(Map):
 
             self.forward = self.forward4D
         elif dim == 6:
-            kernel = torch.tensor([[-1 * curvature ** 2 * length, curvature * length, curvature], ], dtype=dtype)
+            kernel = torch.tensor([-1 * curvature ** 2 * length, curvature * length,], dtype=dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward6D
@@ -213,6 +213,16 @@ class DipoleKick(Map):
         x = torch.stack([xT[0], px, xT[2], xT[3], sigma, *xT[5:]]).transpose(1, 0)
         return x
 
+    def rMatrix(self):
+        positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
+
+        momentaRows = torch.tensor(
+            [[self.weight[0], 1, 0, 0], [0, 0, 0, 1]],
+            dtype=self.dtype)
+
+        rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
+        return rMatrix
+
 
 class EdgeKick(Map):
     """Dipole edge effects."""
@@ -223,7 +233,7 @@ class EdgeKick(Map):
         # initialize weight
         curvature = bendAngle / length
 
-        kernel = torch.tensor([[curvature * math.tan(edgeAngle), -1 * curvature * math.tan(edgeAngle)], ], dtype=dtype)
+        kernel = torch.tensor([curvature * math.tan(edgeAngle), -1 * curvature * math.tan(edgeAngle)], dtype=dtype)
         self.weight = nn.Parameter(kernel)
 
         if dim == 4:
@@ -250,13 +260,24 @@ class EdgeKick(Map):
         x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
         return x
 
+    def rMatrix(self):
+        positionRows = torch.tensor([[1, 0, 0, 0], [0, 0, 1, 0]], dtype=self.dtype)
+
+        momentaRows = torch.tensor(
+            [[self.weight[0], 1, 0, 0], [0, 0, self.weight[1], 1]],
+            dtype=self.dtype)
+
+        rMatrix = torch.stack([positionRows[0], momentaRows[0], positionRows[1], momentaRows[1]])
+        return rMatrix
+
+
 
 if __name__ == "__main__":
     dim = 4
     dtype = torch.double
 
     # set up quad
-    quad = QuadKick(1, 0.1, dim, dtype)
+    quad = DipoleKick(1, 0.1, dim, dtype)
 
     # track
     x = torch.randn(2, dim, dtype=dtype)
