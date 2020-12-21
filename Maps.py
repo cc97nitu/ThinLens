@@ -103,7 +103,7 @@ class QuadKick(Map):
         super().__init__(dim, dtype)
         self.length = 0.0
 
-        weight = torch.tensor([-1 * length * k1, length * k1], dtype=dtype)
+        weight = torch.tensor([length * k1], dtype=dtype)
         self.register_parameter("weight", nn.Parameter(weight))
 
         if dim == 4:
@@ -117,44 +117,66 @@ class QuadKick(Map):
 
     def forward4D(self, x):
         # get positions in reversed order
-        pos = x[:, [0, 2]]
+        # pos = x[:, [0, 2]]
+        xPos, yPos = x[:, 0], x[:, 2]
 
         # get updated momenta
-        momenta = self.weight * pos
-        momenta = momenta + x[:, [1, 3]]
+        # momenta = self.weight * pos
+        # momenta = momenta + x[:, [1, 3]]
+        dPx = -1 * self.weight * xPos
+        dPy = self.weight * yPos
+        px = x[:, 1] + dPx
+        py = x[:, 3] + dPy
 
         # update phase space vector
         xT = x.transpose(1, 0)
-        momentaT = momenta.transpose(1, 0)
+        # momentaT = momenta.transpose(1, 0)
 
-        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
+        # x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
+        x = torch.stack([xT[0], px, xT[2], py], ).transpose(1, 0)
         return x
 
     def forward6D(self, x):
         # get positions
-        pos = x[:, [0, 2]]
-        invDelta = x[:, 7].unsqueeze(1)
+        # pos = x[:, [0, 2]]
+        xPos, yPos = x[:, 0], x[:, 2]
+        # invDelta = x[:, 7].unsqueeze(1)
+        invDelta = x[:, 7]
 
         # get updated momenta
-        momenta = self.weight * invDelta * pos
-        momenta = momenta + x[:, [1, 3]]
+        # momenta = self.weight * invDelta * pos
+        # momenta = momenta + x[:, [1, 3]]
+        dPx = -1 * self.weight * invDelta * xPos
+        dPy = self.weight * invDelta * yPos
+        px = x[:, 1] + dPx
+        py = x[:, 3] + dPy
+
 
         # update phase space vector
         xT = x.transpose(1, 0)
-        momentaT = momenta.transpose(1, 0)
+        # momentaT = momenta.transpose(1, 0)
 
-        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1], *xT[4:]]).transpose(1, 0)
+        x = torch.stack([xT[0], px, xT[2], py, *xT[4:]]).transpose(1, 0)
         return x
 
     def rMatrix(self):
+        # if self.dim == 4:
+        #     rMatrix = torch.eye(4, dtype=self.dtype)
+        #     rMatrix[1, 0] = self.weight[0]
+        #     rMatrix[3, 2] = self.weight[1]
+        # else:
+        #     rMatrix = torch.eye(6, dtype=self.dtype)
+        #     rMatrix[1, 0] = self.weight[0]
+        #     rMatrix[3, 2] = self.weight[1]
+
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
-            rMatrix[1, 0] = self.weight[0]
-            rMatrix[3, 2] = self.weight[1]
+            rMatrix[1, 0] = -1 * self.weight
+            rMatrix[3, 2] = self.weight
         else:
             rMatrix = torch.eye(6, dtype=self.dtype)
-            rMatrix[1, 0] = self.weight[0]
-            rMatrix[3, 2] = self.weight[1]
+            rMatrix[1, 0] = -1 * self.weight
+            rMatrix[3, 2] = self.weight
 
         return rMatrix
 
