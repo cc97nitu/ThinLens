@@ -285,13 +285,13 @@ class SIS18_Cell(Model):
                              **self.generalProperties)
 
         # one day there will be sextupoles
-        ks1c = Elements.Drift(length=0.32, **self.generalProperties)
-        ks3c = Elements.Drift(length=0.32, **self.generalProperties)
+        ks1c = Elements.Dummy(length=0.32, **self.generalProperties)
+        ks3c = Elements.Dummy(length=0.32, **self.generalProperties)
 
         # one day there will be correctors
-        hKick1 = Elements.Drift(0, **self.generalProperties)
-        hKick2 = Elements.Drift(0, **self.generalProperties)
-        vKick = Elements.Drift(0, **self.generalProperties)
+        hKick1 = Elements.Dummy(0, **self.generalProperties)
+        hKick2 = Elements.Dummy(0, **self.generalProperties)
+        vKick = Elements.Dummy(0, **self.generalProperties)
 
         hMon = Elements.Monitor(0.13275, **self.generalProperties)
         vMon = Elements.Monitor(0.13275, **self.generalProperties)
@@ -494,22 +494,22 @@ if __name__ == "__main__":
     dtype = torch.double
 
     # set up models
-    mod1 = SIS18_Lattice(dtype=dtype, cellsIdentical=True)
+    mod1 = SIS18_Cell(dtype=dtype,)
 
-    # activate gradients on kick maps
-    mod1.requires_grad_(False)
+    # get locations
+    for i in range(len(mod1.elements)):
+        if type(mod1.elements[i]) is Elements.Drift:
+            continue
 
-    for m in mod1.modules():
-        if type(m) is Elements.Quadrupole:
-            for mod in m.modules():
-                if type(mod) is ThinLens.Maps.QuadKick:
-                    mod.requires_grad_(True)
+        # print("{} at {}".format(type(mod1.elements[i]), mod1.positions[i] + mod1.elements[i].length / 2))
+        print("{} at {}".format(type(mod1.elements[i]), mod1.elements[i].length))
 
+    print("total length {}".format(mod1.totalLen))
 
-    # count trainable parameters
-    parametersMod1 = list()
-    for parameter in mod1.parameters():
-        if parameter.requires_grad:
-            parametersMod1.append(parameter)
+    # compare lengths
+    model1 = SIS18_Lattice()
+    model2 = SIS18_Lattice_minimal()
 
-    print(len(parametersMod1))
+    print(model1.totalLen)
+    print(model1.totalLen - model2.totalLen)
+

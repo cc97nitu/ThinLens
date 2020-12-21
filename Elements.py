@@ -45,6 +45,12 @@ class Drift(Element):
         return self.map(x)
 
 
+class Dummy(Drift):
+    def __init__(self, length: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+        super(Dummy, self).__init__(length, dim, slices, order, dtype)
+        return
+
+
 class Monitor(Drift):
     """Special drift."""
 
