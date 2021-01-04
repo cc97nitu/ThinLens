@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 import ThinLens.Elements as Elements
+import ThinLens.Maps as Maps
 
 
 class Model(nn.Module):
@@ -97,6 +98,43 @@ class Model(nn.Module):
             sequence += "map{}, at={};\n".format(identifier, refPos)
 
             beginPos += length
+
+        sequence += "\nendsequence;"
+
+        # lattice contains templates and sequence
+        lattice = templates + "\n" + sequence
+        return lattice
+
+    def thinMultipoleMadX(self):
+        # create single string containing whole sequence
+        templates = ""
+        sequence = "sis18: sequence, l = {};\n".format(self.totalLen)
+
+        currentPos = 0.0
+        kickIdentifier = 0
+        for element in self.elements:
+            if type(element) is Elements.Drift or type(element) is Elements.Monitor or type(Elements) is Elements.Dummy:
+                # drifts are added automatically by Mad-X
+                currentPos += element.length
+                continue
+
+            for m in element.maps:
+                currentPos += m.length
+
+                if type(m) is Maps.DriftMap:
+                    # drifts are added automatically by Mad-X
+                    continue
+
+                if type(m) is Maps.EdgeKick:
+                    # dipole edges cannot be expressed as thin multipoles
+                    templates += "map{}: ".format(kickIdentifier) + m.madX() + "\n"
+                    sequence += "map{}, at={};\n".format(kickIdentifier, currentPos)
+                else:
+                    # add template
+                    templates += "kick{}: MULTIPOLE, ".format(kickIdentifier) + m.thinMultipoleElement() + ";\n"
+                    sequence += "kick{}, at={};\n".format(kickIdentifier, currentPos)
+
+                kickIdentifier += 1
 
         sequence += "\nendsequence;"
 
@@ -497,19 +535,4 @@ if __name__ == "__main__":
     mod1 = SIS18_Cell(dtype=dtype,)
 
     # get locations
-    for i in range(len(mod1.elements)):
-        if type(mod1.elements[i]) is Elements.Drift:
-            continue
-
-        # print("{} at {}".format(type(mod1.elements[i]), mod1.positions[i] + mod1.elements[i].length / 2))
-        print("{} at {}".format(type(mod1.elements[i]), mod1.elements[i].length))
-
-    print("total length {}".format(mod1.totalLen))
-
-    # compare lengths
-    model1 = SIS18_Lattice()
-    model2 = SIS18_Lattice_minimal()
-
-    print(model1.totalLen)
-    print(model1.totalLen - model2.totalLen)
-
+    print(mod1.madX())

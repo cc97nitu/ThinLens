@@ -117,12 +117,9 @@ class QuadKick(Map):
 
     def forward4D(self, x):
         # get positions in reversed order
-        # pos = x[:, [0, 2]]
         xPos, yPos = x[:, 0], x[:, 2]
 
         # get updated momenta
-        # momenta = self.weight * pos
-        # momenta = momenta + x[:, [1, 3]]
         dPx = -1 * self.weight * xPos
         dPy = self.weight * yPos
         px = x[:, 1] + dPx
@@ -130,45 +127,26 @@ class QuadKick(Map):
 
         # update phase space vector
         xT = x.transpose(1, 0)
-        # momentaT = momenta.transpose(1, 0)
-
-        # x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1]], ).transpose(1, 0)
         x = torch.stack([xT[0], px, xT[2], py], ).transpose(1, 0)
         return x
 
     def forward6D(self, x):
         # get positions
-        # pos = x[:, [0, 2]]
         xPos, yPos = x[:, 0], x[:, 2]
-        # invDelta = x[:, 7].unsqueeze(1)
         invDelta = x[:, 7]
 
         # get updated momenta
-        # momenta = self.weight * invDelta * pos
-        # momenta = momenta + x[:, [1, 3]]
         dPx = -1 * self.weight * invDelta * xPos
         dPy = self.weight * invDelta * yPos
         px = x[:, 1] + dPx
         py = x[:, 3] + dPy
 
-
         # update phase space vector
         xT = x.transpose(1, 0)
-        # momentaT = momenta.transpose(1, 0)
-
         x = torch.stack([xT[0], px, xT[2], py, *xT[4:]]).transpose(1, 0)
         return x
 
     def rMatrix(self):
-        # if self.dim == 4:
-        #     rMatrix = torch.eye(4, dtype=self.dtype)
-        #     rMatrix[1, 0] = self.weight[0]
-        #     rMatrix[3, 2] = self.weight[1]
-        # else:
-        #     rMatrix = torch.eye(6, dtype=self.dtype)
-        #     rMatrix[1, 0] = self.weight[0]
-        #     rMatrix[3, 2] = self.weight[1]
-
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
             rMatrix[1, 0] = -1 * self.weight
@@ -180,23 +158,29 @@ class QuadKick(Map):
 
         return rMatrix
 
+    def thinMultipoleElement(self):
+        k1L = self.weight.item()
+        return "KNL={{0.0, {:.4e}}}".format(k1L)
+
+
 
 class DipoleKick(Map):
     """Apply an horizontal dipole kick."""
 
     def __init__(self, length: float, angle: float, dim: int, dtype: torch.dtype):
         super().__init__(dim=dim, dtype=dtype)
+        self.dipoleLength = length  # used to calculate k0L for Mad-X
 
         # initialize weight
         curvature = angle / length
 
         if dim == 4:
-            kernel = torch.tensor([-1 * curvature ** 2 * length], dtype=dtype)
+            kernel = torch.tensor([curvature ** 2 * length], dtype=dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward4D
         elif dim == 6:
-            kernel = torch.tensor([-1 * curvature ** 2 * length, -1 * curvature * length,], dtype=dtype)
+            kernel = torch.tensor([curvature ** 2 * length, curvature * length,], dtype=dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward6D
@@ -210,7 +194,7 @@ class DipoleKick(Map):
         pos = x[:, 0]
 
         # get updated momenta
-        momenta = self.weight * pos
+        momenta = -1 * self.weight * pos
         momenta = momenta + x[:, 1]
 
         # update phase space vector
@@ -227,10 +211,10 @@ class DipoleKick(Map):
         velocityRatio = x[:, 8]
 
         # get updates
-        px = self.weight[0] * pos[:, 0] + -1 * self.weight[1] * delta
+        px = -1 * self.weight[0] * pos[:, 0] + self.weight[1] * delta
         px = x[:, 1] + px
 
-        sigma = self.weight[1] * velocityRatio
+        sigma = -1 * self.weight[1] * velocityRatio
         sigma = x[:, 4] + sigma
 
         # update phase space vector
@@ -242,13 +226,23 @@ class DipoleKick(Map):
     def rMatrix(self):
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
-            rMatrix[1, 0] = self.weight[0]
+            rMatrix[1, 0] = -1 * self.weight[0]
         else:
             rMatrix = torch.eye(6, dtype=self.dtype)
-            rMatrix[1, 0] = self.weight[0]
-            rMatrix[4, 0] = self.weight[1]
+            rMatrix[1, 0] = -1 * self.weight[0]
+            rMatrix[4, 0] = -1 * self.weight[1]
 
         return rMatrix
+
+    def thinMultipoleElement(self):
+        if self.dim == 4:
+            # k0L = self.weight.item() * self.dipoleLength
+            k0L = self.weight.item()
+        else:
+            # k0L = self.weight[0].item() * self.dipoleLength
+            k0L = self.weight[0].item()
+
+        return "KNL={{{:.4e}}}".format(k0L)
 
 
 class EdgeKick(Map):
@@ -334,4 +328,5 @@ if __name__ == "__main__":
     # matrix
     print("rMatrix")
     print(quad.rMatrix())
+    print(quad.thinMultipoleElement())
 
