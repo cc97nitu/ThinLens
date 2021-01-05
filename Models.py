@@ -374,6 +374,7 @@ class SIS18_Lattice_minimal(Model):
         quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * quadSliceMultiplicity
 
         # SIS18 consists of 12 identical cells
+        self.cells = list()
         beamline = list()
         for i in range(12):
             # specify beam line elements
@@ -393,7 +394,9 @@ class SIS18_Lattice_minimal(Model):
             d5 = Elements.Drift(0.7097999999999978, **self.generalProperties)
             d6 = Elements.Drift(0.49979999100000283, **self.generalProperties)
 
-            beamline.append([d1, rb1, d2, rb2, d3, qs1f, d4, qs2d, d5, qs3t, d6])
+            cell = [d1, rb1, d2, rb2, d3, qs1f, d4, qs2d, d5, qs3t, d6]
+            self.cells.append(cell)
+            beamline.append(cell)
 
         # flatten beamline
         flattenedBeamline = list()
@@ -418,6 +421,7 @@ class SIS18_Lattice(Model):
         quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * quadSliceMultiplicity
 
         # SIS18 consists of 12 identical cells
+        self.cells = list()
         beamline = list()
         if cellsIdentical:
             # specify beam line elements
@@ -461,10 +465,12 @@ class SIS18_Lattice(Model):
             qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
 
             for i in range(12):
-                beamline.append(
-                    [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c,
+                cell = [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c,
                      d5b,
-                     qs3t, d6a, hMon, vMon, d6b])
+                     qs3t, d6a, hMon, vMon, d6b]
+
+                self.cells.append(cell)
+                beamline.append(cell)
 
         else:
             for i in range(12):
@@ -508,10 +514,12 @@ class SIS18_Lattice(Model):
                 qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
                 qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
 
-                beamline.append(
-                    [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c,
+                cell = [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c,
                      d5b,
-                     qs3t, d6a, hMon, vMon, d6b])
+                     qs3t, d6a, hMon, vMon, d6b]
+
+                self.cells.append(cell)
+                beamline.append(cell)
 
         # flatten beamline
         flattenedBeamline = list()
