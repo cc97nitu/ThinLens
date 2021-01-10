@@ -34,13 +34,13 @@ class DriftMap(Map):
 
         if dim == 4:
             # set up weights
-            kernel = torch.tensor([self.length, self.length], dtype=self.dtype)
+            kernel = torch.tensor(self.length, dtype=self.dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward4D
         elif dim == 6:
             # set up weights
-            kernel = torch.tensor([self.length, self.length], dtype=self.dtype)
+            kernel = torch.tensor(self.length, dtype=self.dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward6D
@@ -53,7 +53,7 @@ class DriftMap(Map):
         # get momenta
         momenta = x[:, [1, 3]]
 
-        # get updated momenta
+        # get updated positions
         pos = self.length * momenta
         pos = pos + x[:, [0, 2]]
 
@@ -86,12 +86,12 @@ class DriftMap(Map):
     def rMatrix(self):
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
-            rMatrix[0, 1] = self.weight[0]
-            rMatrix[2, 3] = self.weight[1]
+            rMatrix[0, 1] = self.weight
+            rMatrix[2, 3] = self.weight
         else:
             rMatrix = torch.eye(6, dtype=self.dtype)
-            rMatrix[0, 1] = self.weight[0]
-            rMatrix[2, 3] = self.weight[1]
+            rMatrix[0, 1] = self.weight
+            rMatrix[2, 3] = self.weight
 
         return rMatrix
 
@@ -320,10 +320,12 @@ if __name__ == "__main__":
     dtype = torch.double
 
     # set up quad
-    quad = DipoleKick(1, 0.1, dim, dtype)
+    quad = DriftMap(1, dim, dtype)
 
     # track
-    x = torch.randn(2, dim, dtype=dtype)
+    x = torch.randn((2, 9), dtype=dtype)
+    print(x)
+    print(quad(x))
 
     # matrix
     print("rMatrix")
