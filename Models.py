@@ -1,4 +1,6 @@
 import math
+import json
+
 import torch
 import torch.nn as nn
 
@@ -156,6 +158,35 @@ class Model(nn.Module):
             return [xTune, yTune]
 
         return [xTune, ]
+
+    def dumpJSON(self, fileHandler):
+        modelType = type(self).__name__
+
+        # store all weights
+        weights = [modelType,]
+        for e in self.elements:
+            for m in e.maps:
+                weights.append(m.weight.tolist())
+
+        # dump at given location
+        json.dump(weights, fileHandler)
+
+        return
+
+    def loadJSON(self, fileHandler):
+        weights = iter(json.load(fileHandler))
+
+        # check if model dump is of same type as self
+        if not next(weights) == type(self).__name__:
+            raise IOError("file contains wrong model type")
+
+        for e in self.elements:
+            for m in e.maps:
+                weight = torch.tensor(next(weights), dtype=self.dtype)
+                m.weight = nn.Parameter(weight)
+
+        return
+
 
 
 class F0D0Model(Model):
@@ -542,5 +573,18 @@ if __name__ == "__main__":
     # set up models
     mod1 = SIS18_Cell(dtype=dtype,)
 
-    # get locations
-    print(mod1.madX())
+    # dump
+    with open("/dev/shm/SIS18.dump", "w") as file:
+        mod1.dumpJSON(file)
+
+    # load
+    with open("/dev/shm/SIS18.dump", "r") as file:
+        mod1.loadJSON(file)
+
+    # print first param
+    for e in mod1.elements:
+        for m in e.maps:
+            print(m.weight)
+            break
+
+        break
