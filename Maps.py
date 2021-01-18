@@ -175,12 +175,14 @@ class DipoleKick(Map):
         curvature = angle / length
 
         if dim == 4:
-            kernel = torch.tensor([curvature ** 2 * length], dtype=dtype)
+            # kernel = torch.tensor([curvature ** 2 * length], dtype=dtype)
+            kernel = torch.tensor(curvature, dtype=dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward4D
         elif dim == 6:
-            kernel = torch.tensor([curvature ** 2 * length, curvature * length,], dtype=dtype)
+            # kernel = torch.tensor([curvature ** 2 * length, curvature * length,], dtype=dtype)
+            kernel = torch.tensor(curvature, dtype=dtype)
             self.weight = nn.Parameter(kernel)
 
             self.forward = self.forward6D
@@ -194,7 +196,7 @@ class DipoleKick(Map):
         pos = x[:, 0]
 
         # get updated momenta
-        momenta = -1 * self.weight * pos
+        momenta = -1 * self.weight**2 * self.dipoleLength * pos
         momenta = momenta + x[:, 1]
 
         # update phase space vector
@@ -211,10 +213,10 @@ class DipoleKick(Map):
         velocityRatio = x[:, 8]
 
         # get updates
-        px = -1 * self.weight[0] * pos[:, 0] + self.weight[1] * delta
+        px = -1 * self.weight**2 * self.dipoleLength * pos[:, 0] + self.weight * self.dipoleLength * delta
         px = x[:, 1] + px
 
-        sigma = -1 * self.weight[1] * velocityRatio
+        sigma = -1 * self.weight * self.dipoleLength * velocityRatio
         sigma = x[:, 4] + sigma
 
         # update phase space vector
@@ -226,11 +228,11 @@ class DipoleKick(Map):
     def rMatrix(self):
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
-            rMatrix[1, 0] = -1 * self.weight[0]
+            rMatrix[1, 0] = -1 * self.weight**2 * self.dipoleLength
         else:
             rMatrix = torch.eye(6, dtype=self.dtype)
-            rMatrix[1, 0] = -1 * self.weight[0]
-            rMatrix[4, 0] = -1 * self.weight[1]
+            rMatrix[1, 0] = -1 * self.weight**2 * self.dipoleLength
+            rMatrix[4, 0] = -1 * self.weight * self.dipoleLength
 
         return rMatrix
 
@@ -240,7 +242,7 @@ class DipoleKick(Map):
             k0L = self.weight.item()
         else:
             # k0L = self.weight[0].item() * self.dipoleLength
-            k0L = self.weight[0].item()
+            k0L = self.weight.item() * self.dipoleLength
 
         return "KNL={{{:.4e}}}".format(k0L)
 
