@@ -129,8 +129,8 @@ class Model(nn.Module):
 
                 if type(m) is Maps.EdgeKick:
                     # dipole edges cannot be expressed as thin multipoles
-                    templates += "map{}: ".format(kickIdentifier) + m.madX() + "\n"
-                    sequence += "map{}, at={};\n".format(kickIdentifier, currentPos)
+                    templates += "dipedge{}: dipedge, ".format(kickIdentifier) + m.thinMultipoleElement() + ";\n"
+                    sequence += "dipedge{}, at={};\n".format(kickIdentifier, currentPos)
                 else:
                     # add template
                     templates += "kick{}: MULTIPOLE, ".format(kickIdentifier) + m.thinMultipoleElement() + ";\n"

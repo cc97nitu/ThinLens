@@ -237,14 +237,8 @@ class DipoleKick(Map):
         return rMatrix
 
     def thinMultipoleElement(self):
-        if self.dim == 4:
-            # k0L = self.weight.item() * self.dipoleLength
-            k0L = self.weight.item()
-        else:
-            # k0L = self.weight[0].item() * self.dipoleLength
-            k0L = self.weight.item() * self.dipoleLength
-
-        return "KNL={{{:.4e}}}".format(k0L)
+        k0L = 1 / self.weight.item() * self.dipoleLength
+        return "KNL={{{:.8e}}}".format(k0L)
 
 
 class EdgeKick(Map):
@@ -252,6 +246,9 @@ class EdgeKick(Map):
 
     def __init__(self, length: float, bendAngle: float, edgeAngle: float, dim: int, dtype: torch.dtype):
         super().__init__(dim=dim, dtype=dtype)
+
+        self.curvature = bendAngle / length
+        self.edgeAngle = edgeAngle
 
         # initialize weight
         curvature = bendAngle / length
@@ -302,7 +299,6 @@ class EdgeKick(Map):
         x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1], *xT[4:],]).transpose(1, 0)
         return x
 
-
     def rMatrix(self):
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
@@ -315,6 +311,8 @@ class EdgeKick(Map):
 
         return rMatrix
 
+    def thinMultipoleElement(self):
+        return "H={}, E1={}".format(self.curvature, self.edgeAngle/2)
 
 
 if __name__ == "__main__":
