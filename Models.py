@@ -160,6 +160,7 @@ class Model(nn.Module):
         return [xTune, ]
 
     def dumpJSON(self, fileHandler):
+        """Save model to disk."""
         modelType = type(self).__name__
 
         # store all weights
@@ -174,7 +175,36 @@ class Model(nn.Module):
         return
 
     def loadJSON(self, fileHandler):
+        """Load model from disk."""
         weights = iter(json.load(fileHandler))
+
+        # check if model dump is of same type as self
+        if not next(weights) == type(self).__name__:
+            raise IOError("file contains wrong model type")
+
+        for e in self.elements:
+            for m in e.maps:
+                weight = torch.tensor(next(weights), dtype=self.dtype)
+                m.weight = nn.Parameter(weight)
+
+        return
+
+    def toJSON(self):
+        """Return model description as string."""
+        modelType = type(self).__name__
+
+        # store all weights
+        weights = [modelType,]
+        for e in self.elements:
+            for m in e.maps:
+                weights.append(m.weight.tolist())
+
+        # return as JSON string
+        return json.dumps(weights)
+
+    def fromJSON(self, description: str):
+        """Load model from string."""
+        weights = iter(json.loads(description))
 
         # check if model dump is of same type as self
         if not next(weights) == type(self).__name__:
@@ -580,6 +610,10 @@ if __name__ == "__main__":
     # load
     with open("/dev/shm/SIS18.dump", "r") as file:
         mod1.loadJSON(file)
+
+    # dump to string
+    description = mod1.toJSON()
+    mod1.fromJSON(description)
 
     # print first param
     for e in mod1.elements:
