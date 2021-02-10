@@ -108,6 +108,7 @@ class Model(nn.Module):
         return lattice
 
     def thinMultipoleMadX(self):
+        """Export as Mad-X sequence consisting of thin-multipole and dipole edge elements."""
         # create single string containing whole sequence
         templates = ""
         sequence = "sis18: sequence, l = {};\n".format(self.totalLen)
@@ -158,6 +159,119 @@ class Model(nn.Module):
             return [xTune, yTune]
 
         return [xTune, ]
+
+    def getInitialTwiss(self):
+        """Calculate twiss parameters of periodic solution at lattice start."""
+        oneTurnMap = self.rMatrix()
+
+        cosMuX = 1/2 * oneTurnMap[:2, :2].trace()
+
+        if torch.abs(cosMuX) > 1:
+            raise ValueError("no periodic solution, cosine(phaseAdvance) out of bounds")
+
+        sinMuX = torch.sign(oneTurnMap[0, 1]) * torch.sqrt(1 - cosMuX**2)
+        betaX0 = oneTurnMap[0, 1] / sinMuX
+        alphaX0 = 1 / (2 * sinMuX) * (oneTurnMap[0, 0] - oneTurnMap[1, 1])
+
+        if self.dim == 4 or self.dim == 6:
+            cosMuY = 1/2 * oneTurnMap[2:4, 2:4].trace()
+
+            if torch.abs(cosMuX) > 1:
+                raise ValueError("no periodic solution, cosine(phaseAdvance) out of bounds")
+
+            sinMuY = torch.sign(oneTurnMap[2, 3]) * torch.sqrt(1 - cosMuY**2)
+            betaY0 = oneTurnMap[2, 3] / sinMuY
+            alphaY0 = 1 / (2*sinMuY) * (oneTurnMap[2, 2] - oneTurnMap[3, 3])
+
+            return tuple([betaX0, alphaX0]), tuple([betaY0, alphaY0])
+
+        return tuple([betaX0, alphaX0])
+
+    def twissTransportMatrix(self, rMatrix: torch.Tensor):
+        """Convert transport matrix into twiss transport matrix."""
+        if (self.dim != 4) and (self.dim != 6):
+            raise NotImplementedError("twiss calculation not implemented for 2D-case")
+
+        # x-plane
+        xMat = rMatrix[:2, :2]
+        c, cp, s, sp = xMat[0, 0], xMat[1, 0], xMat[0, 1], xMat[1, 1]
+
+        twissTransportX = torch.tensor([[c**2, -2*s*c, s**2],
+                                       [-1*c*cp, s*cp+sp*c, -1*s*sp],
+                                       [cp**2, -2*sp*cp, sp**2],], dtype=self.dtype)
+
+        # x-plane
+        yMat = rMatrix[2:4, 2:4]
+        c, cp, s, sp = yMat[0, 0], yMat[1, 0], yMat[0, 1], yMat[1, 1]
+
+        twissTransportY = torch.tensor([[c**2, -2*s*c, s**2],
+                                       [-1*c*cp, s*cp+sp*c, -1*s*sp],
+                                       [cp**2, -2*sp*cp, sp**2],], dtype=self.dtype)
+
+        return twissTransportX, twissTransportY
+
+    def getTwiss(self):
+        if (self.dim != 4) and (self.dim != 6):
+            raise NotImplementedError("twiss calculation not implemented for 2D-case")
+
+        # get initial twiss
+        twissX0, twissY0 = self.getInitialTwiss()
+
+        pos = [0,]
+        betaX, alphaX, betaY, alphaY = [twissX0[0]], [twissX0[1]], [twissY0[0]], [twissY0[1]]
+        twissX0 = torch.tensor([betaX[-1], alphaX[-1], (1 + alphaX[-1] ** 2) / betaX[-1]], dtype=self.dtype)
+        twissY0 = torch.tensor([betaY[-1], alphaY[-1], (1 + alphaY[-1] ** 2) / betaY[-1]], dtype=self.dtype)
+
+        lengths = [0,]
+        mux = [0,]
+
+        # calculate twiss along lattice
+        rMatrix = torch.eye(self.dim, dtype=self.dtype)
+
+        for element in self.elements:
+            for m in element.maps:
+                # update position
+                pos.append(pos[-1] + m.length)
+
+                # update twiss
+                rMatrix = torch.matmul(m.rMatrix(), rMatrix)
+                twissTransportX, twissTransportY = self.twissTransportMatrix(rMatrix)
+
+                twissX = torch.matmul(twissTransportX, twissX0)
+                twissY = torch.matmul(twissTransportY, twissY0)
+
+                betaX.append(twissX[0].item())
+                alphaX.append(twissX[1].item())
+                betaY.append(twissY[0].item())
+                alphaY.append(twissY[0].item())
+
+                # # update phase advance
+                # lengths.append(m.length)
+                # betaXMean = 1/2 * (betaX[-1] + betaX[-2])
+                # mux.append(1/betaX[-1] * m.length)
+
+
+        # store results
+        twiss = dict()
+        twiss["s"] = torch.tensor(pos, dtype=self.dtype)
+
+        twiss["betx"] = torch.tensor(betaX, dtype=self.dtype)
+        twiss["alfx"] = torch.tensor(alphaX, dtype=self.dtype)
+        twiss["bety"] = torch.tensor(betaY, dtype=self.dtype)
+        twiss["alfy"] = torch.tensor(alphaY, dtype=self.dtype)
+
+        # # calculate phase advance
+        # twiss["mux"] = torch.cumsum(torch.tensor(mux, dtype=self.dtype), dim=0)
+        # twiss["muy"] = torch.cumsum(1/twiss["bety"], dim=0)
+        # # twiss["mux"] = torch.tensor(mux, dtype=self.dtype)
+        #
+        # lengths = torch.tensor(lengths, dtype=self.dtype)
+        # mux = [torch.trapz(1/twiss["betx"][:i+1], lengths[:i+1]) for i in range(len(twiss["betx"]))]
+        # twiss["mux"] = torch.tensor(mux, dtype=self.dtype)
+
+
+        return twiss
+
 
     def dumpJSON(self, fileHandler):
         """Save model to disk."""
@@ -594,14 +708,17 @@ class SIS18_Lattice(Model):
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+
     import ThinLens.Maps
 
     torch.set_printoptions(precision=4, sci_mode=True)
 
     dtype = torch.double
+    dim = 6
 
     # set up models
-    mod1 = SIS18_Cell(dtype=dtype,)
+    mod1 = SIS18_Cell(dtype=dtype, dim=dim)
 
     # dump
     with open("/dev/shm/SIS18.dump", "w") as file:
@@ -622,3 +739,21 @@ if __name__ == "__main__":
             break
 
         break
+
+    # show initial twiss
+    print("initial twiss")
+    twissX0, twissY0 = mod1.getInitialTwiss()
+    print(twissX0, twissY0)
+
+    # get tunes
+    print("tunes: {}".format(mod1.getTunes()))
+
+    # show twiss
+    twiss = mod1.getTwiss()
+
+    q1, q2 = twiss["mux"][-1] / (2*math.pi), twiss["muy"][-1] / (2*math.pi)
+    print("tunes from twiss: {:.3f}, {:.3f}".format(q1, q2))
+
+    plt.plot(twiss["s"], twiss["bety"])
+    plt.show()
+    plt.close()
