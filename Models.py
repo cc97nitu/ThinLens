@@ -613,6 +613,9 @@ class SIS18_Lattice(Model):
             ks1c = Elements.Drift(length=0.32, **self.generalProperties)
             ks3c = Elements.Drift(length=0.32, **self.generalProperties)
 
+            # ks1c = Elements.Sextupole(length=0.32, **self.generalProperties)
+            # ks3c = Elements.Sextupole(length=0.32, **self.generalProperties)
+
             # one day there will be correctors
             hKick1 = Elements.Drift(0, **self.generalProperties)
             hKick2 = Elements.Drift(0, **self.generalProperties)

@@ -160,7 +160,7 @@ class QuadKick(Map):
 
     def thinMultipoleElement(self):
         k1L = self.weight.item()
-        return "KNL={{0.0, {:.4e}}}".format(k1L)
+        return "KNL={{0.0, {k1L}}}".format(k1L=k1L)
 
 
 
@@ -237,8 +237,8 @@ class DipoleKick(Map):
         return rMatrix
 
     def thinMultipoleElement(self):
-        k0L = 1 / self.weight.item() * self.dipoleLength
-        return "KNL={{{:.8e}}}".format(k0L)
+        k0L = self.weight.item() * self.dipoleLength  # horizontal bending angle
+        return "LRAD={length}, KNL={{{k0L}}}".format(length=self.dipoleLength, k0L=k0L)
 
 
 class EdgeKick(Map):
@@ -312,7 +312,75 @@ class EdgeKick(Map):
         return rMatrix
 
     def thinMultipoleElement(self):
-        return "H={}, E1={}".format(self.curvature, self.edgeAngle/2)
+        return "H={}, E1={}".format(self.curvature, self.edgeAngle)
+
+
+class SextKick(Map):
+    """Decoupled planes."""
+
+    def __init__(self, length: float, k2: float, dim: int, dtype: torch.dtype):
+        super().__init__(dim, dtype)
+        self.length = 0.0
+
+        weight = torch.tensor([length * k2], dtype=dtype)
+        self.register_parameter("weight", nn.Parameter(weight))
+
+        if dim == 4:
+            self.forward = self.forward4D
+        elif dim == 6:
+            self.forward = self.forward6D
+        else:
+            raise NotImplementedError("dim {} not supported".format(dim))
+
+        return
+
+    def forward4D(self, x):
+        # get positions in reversed order
+        xPos, yPos = x[:, 0], x[:, 2]
+
+        # get updated momenta
+        dPx = -1/2 * self.weight * (xPos**2 + yPos**2)
+        dPy = self.weight * yPos * xPos
+        px = x[:, 1] + dPx
+        py = x[:, 3] + dPy
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+        x = torch.stack([xT[0], px, xT[2], py], ).transpose(1, 0)
+        return x
+
+    def forward6D(self, x):
+        # get positions
+        xPos, yPos = x[:, 0], x[:, 2]
+        invDelta = x[:, 7]
+
+        # get updated momenta
+        dPx = -1/2 * self.weight * invDelta * (xPos**2 + yPos**2)
+        dPy = self.weight * invDelta * yPos * xPos
+        px = x[:, 1] + dPx
+        py = x[:, 3] + dPy
+
+        # update phase space vector
+        xT = x.transpose(1, 0)
+        x = torch.stack([xT[0], px, xT[2], py, *xT[4:]]).transpose(1, 0)
+        return x
+
+    def rMatrix(self):
+        """Not implemented yet."""
+        if self.dim == 4:
+            rMatrix = torch.eye(4, dtype=self.dtype)
+            # rMatrix[1, 0] = -1 * self.weight
+            # rMatrix[3, 2] = self.weight
+        else:
+            rMatrix = torch.eye(6, dtype=self.dtype)
+            # rMatrix[1, 0] = -1 * self.weight
+            # rMatrix[3, 2] = self.weight
+
+        return rMatrix
+
+    def thinMultipoleElement(self):
+        k2L = self.weight.item()
+        return "KNL={{0.0, 0.0, {k2L}}}".format(k2L=k2L)
 
 
 if __name__ == "__main__":

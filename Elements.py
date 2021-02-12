@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ThinLens.Maps import DriftMap, DipoleKick, QuadKick, EdgeKick
+from ThinLens.Maps import DriftMap, DipoleKick, QuadKick, SextKick, EdgeKick
 
 
 class Element(nn.Module):
@@ -123,6 +123,15 @@ class RBen(SBen):
 class Quadrupole(KickElement):
     def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
         kickMap = lambda length: QuadKick(length, k1, dim, self.dtype)
+
+        super().__init__(length=length, kickMap=kickMap, dim=dim, slices=slices, order=order, dtype=dtype)
+
+        return
+
+
+class Sextupole(KickElement):
+    def __init__(self, length: float, k2: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+        kickMap = lambda length: SextKick(length, k2, dim, self.dtype)
 
         super().__init__(length=length, kickMap=kickMap, dim=dim, slices=slices, order=order, dtype=dtype)
 
