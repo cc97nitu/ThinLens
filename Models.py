@@ -585,7 +585,8 @@ class SIS18_Lattice_minimal(Model):
 
 
 class SIS18_Lattice(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 4, slices: int = 1,
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, k2f: float = 0, k2d: float = 0,
+                 dim: int = 4, slices: int = 1,
                  order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32, cellsIdentical: bool = False):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
@@ -609,12 +610,9 @@ class SIS18_Lattice(Model):
             rb2b = Elements.RBen(length=2.617993878 / 2, angle=0.2617993878 / 2, e1=0, e2=0.1274090354,
                                  **self.generalProperties)
 
-            # one day there will be sextupoles
-            ks1c = Elements.Drift(length=0.32, **self.generalProperties)
-            ks3c = Elements.Drift(length=0.32, **self.generalProperties)
-
-            # ks1c = Elements.Sextupole(length=0.32, **self.generalProperties)
-            # ks3c = Elements.Sextupole(length=0.32, **self.generalProperties)
+            # sextupoles
+            ks1c = Elements.Sextupole(length=0.32, k2=k2f, **self.generalProperties)
+            ks3c = Elements.Sextupole(length=0.32, k2=k2d, **self.generalProperties)
 
             # one day there will be correctors
             hKick1 = Elements.Drift(0, **self.generalProperties)
@@ -662,9 +660,9 @@ class SIS18_Lattice(Model):
                 rb2b = Elements.RBen(length=2.617993878 / 2, angle=0.2617993878 / 2, e1=0, e2=0.1274090354,
                                      **self.generalProperties)
 
-                # one day there will be sextupoles
-                ks1c = Elements.Drift(length=0.32, **self.generalProperties)
-                ks3c = Elements.Drift(length=0.32, **self.generalProperties)
+                # sextupoles
+                ks1c = Elements.Sextupole(length=0.32, k2=k2f, **self.generalProperties)
+                ks3c = Elements.Sextupole(length=0.32, k2=k2d, **self.generalProperties)
 
                 # one day there will be correctors
                 hKick1 = Elements.Drift(0, **self.generalProperties)
