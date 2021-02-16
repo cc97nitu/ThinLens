@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ThinLens.Maps import DriftMap, DipoleKick, QuadKick, SextKick, EdgeKick
+from ThinLens.Maps import DriftMap, DipoleKick, EdgeKick, MultipoleKick
 
 
 class Element(nn.Module):
@@ -66,12 +66,6 @@ class KickElement(Element):
         if order == 2:
             self.coeffC = [1 / 2, 1 / 2]
             self.coeffD = [1, 0]
-        elif order == 3:
-            self.coeffC = [2 / 3, -2 / 3, 1]
-            self.coeffD = [7 / 24, 3 / 4, -1 / 24]
-        elif order == 4:
-            self.coeffC = [0.6756, 0.411, 0.411, 0.6756]
-            self.coeffD = [0, 0.82898, 0.72991, 0.82898]
         else:
             raise NotImplementedError("order {} not implemented".format(order))
 
@@ -120,38 +114,85 @@ class RBen(SBen):
         return
 
 
-class Quadrupole(KickElement):
-    def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
-        kickMap = lambda length: QuadKick(length, k1, dim, self.dtype)
+class MultipoleKickElement(Element):
+    """Base class for elements consisting of both drift and kicks."""
 
-        super().__init__(length=length, kickMap=kickMap, dim=dim, slices=slices, order=order, dtype=dtype)
+    def __init__(self, length: float, kn: list, ks: list, dim: int, slices: int, order: int, dtype: torch.dtype):
+        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        self.length = length
+
+        # split scheme for hamiltonian
+        if order == 2:
+            self.coeffC = [1 / 2, 1 / 2]
+            self.coeffD = [1, 0]
+        else:
+            raise NotImplementedError("order {} not implemented".format(order))
+
+        # register common weights
+        for i in range(1, 4):
+            normWeight = torch.tensor([kn[i - 1]], dtype=dtype)
+            self.register_parameter("k{}n".format(i), nn.Parameter(normWeight))
+            skewWeight = torch.tensor([ks[i - 1]], dtype=dtype)
+            self.register_parameter("k{}s".format(i), nn.Parameter(skewWeight))
+
+        # same map for each slice
+        self.maps = list()
+
+        for c, d in zip(self.coeffC, self.coeffD):
+            if c:
+                self.maps.append(DriftMap(c * length / slices, dim, self.dtype))
+            if d:
+                self.maps.append(MultipoleKick(d * length / slices, dim, self.dtype))
+
+        # use common weights
+        for m in self.maps:
+            if type(m) is DriftMap:
+                continue
+
+            m.k1n = self.k1n
+            m.k2n = self.k2n
+            m.k3n = self.k3n
+            m.k1s = self.k1s
+            m.k2s = self.k2s
+            m.k3s = self.k3s
+
+        self.maps = nn.ModuleList(self.maps * slices)
+        return
+
+
+class Quadrupole(MultipoleKickElement):
+    def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+
+        kn = [k1, 0, 0]
+        ks = [0, 0, 0]
+        super().__init__(length=length, kn=kn, ks=ks, dim=dim, slices=slices, order=order, dtype=dtype)
 
         return
 
 
-class Sextupole(KickElement):
+class Sextupole(MultipoleKickElement):
     def __init__(self, length: float, k2: float, dim: int, slices: int, order: int, dtype: torch.dtype):
-        kickMap = lambda length: SextKick(length, k2, dim, self.dtype)
 
-        super().__init__(length=length, kickMap=kickMap, dim=dim, slices=slices, order=order, dtype=dtype)
+        kn = [0, k2, 0]
+        ks = [0, 0, 0]
+        super().__init__(length=length, kn=kn, ks=ks, dim=dim, slices=slices, order=order, dtype=dtype)
 
         return
 
 
 if __name__ == "__main__":
-    dim = 4
+    dim = 6
     order = 2
-    slices = 1
+    slices = 4
     dtype = torch.float32
 
     drift = Drift(3, dim=dim, order=order, slices=slices, dtype=dtype)
-    quad = Quadrupole(1, 0.3, dim=dim, order=order, slices=slices, dtype=dtype)
+    quad = Sextupole(1, 0.3, dim=dim, order=order, slices=slices, dtype=dtype)
 
     # create particle
-    x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0], ])
+    x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0, 0, 0, 0, 1, 1], ])
 
     # track
     x = quad(x0)
     print(x)
 
-    print(quad.rMatrix())

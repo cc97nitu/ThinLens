@@ -96,74 +96,6 @@ class DriftMap(Map):
         return rMatrix
 
 
-class QuadKick(Map):
-    """Decoupled planes."""
-
-    def __init__(self, length: float, k1: float, dim: int, dtype: torch.dtype):
-        super().__init__(dim, dtype)
-        self.length = 0.0
-
-        weight = torch.tensor([length * k1], dtype=dtype)
-        self.register_parameter("weight", nn.Parameter(weight))
-
-        if dim == 4:
-            self.forward = self.forward4D
-        elif dim == 6:
-            self.forward = self.forward6D
-        else:
-            raise NotImplementedError("dim {} not supported".format(dim))
-
-        return
-
-    def forward4D(self, x):
-        # get positions in reversed order
-        xPos, yPos = x[:, 0], x[:, 2]
-
-        # get updated momenta
-        dPx = -1 * self.weight * xPos
-        dPy = self.weight * yPos
-        px = x[:, 1] + dPx
-        py = x[:, 3] + dPy
-
-        # update phase space vector
-        xT = x.transpose(1, 0)
-        x = torch.stack([xT[0], px, xT[2], py], ).transpose(1, 0)
-        return x
-
-    def forward6D(self, x):
-        # get positions
-        xPos, yPos = x[:, 0], x[:, 2]
-        invDelta = x[:, 7]
-
-        # get updated momenta
-        dPx = -1 * self.weight * invDelta * xPos
-        dPy = self.weight * invDelta * yPos
-        px = x[:, 1] + dPx
-        py = x[:, 3] + dPy
-
-        # update phase space vector
-        xT = x.transpose(1, 0)
-        x = torch.stack([xT[0], px, xT[2], py, *xT[4:]]).transpose(1, 0)
-        return x
-
-    def rMatrix(self):
-        if self.dim == 4:
-            rMatrix = torch.eye(4, dtype=self.dtype)
-            rMatrix[1, 0] = -1 * self.weight
-            rMatrix[3, 2] = self.weight
-        else:
-            rMatrix = torch.eye(6, dtype=self.dtype)
-            rMatrix[1, 0] = -1 * self.weight
-            rMatrix[3, 2] = self.weight
-
-        return rMatrix
-
-    def thinMultipoleElement(self):
-        k1L = self.weight.item()
-        return "KNL={{0.0, {k1L}}}".format(k1L=k1L)
-
-
-
 class DipoleKick(Map):
     """Apply an horizontal dipole kick."""
 
@@ -196,7 +128,7 @@ class DipoleKick(Map):
         pos = x[:, 0]
 
         # get updated momenta
-        momenta = -1 * self.weight**2 * self.dipoleLength * pos
+        momenta = -1 * self.weight ** 2 * self.dipoleLength * pos
         momenta = momenta + x[:, 1]
 
         # update phase space vector
@@ -213,7 +145,7 @@ class DipoleKick(Map):
         velocityRatio = x[:, 8]
 
         # get updates
-        px = -1 * self.weight**2 * self.dipoleLength * pos[:, 0] + self.weight * self.dipoleLength * delta
+        px = -1 * self.weight ** 2 * self.dipoleLength * pos[:, 0] + self.weight * self.dipoleLength * delta
         px = x[:, 1] + px
 
         sigma = -1 * self.weight * self.dipoleLength * velocityRatio
@@ -228,10 +160,10 @@ class DipoleKick(Map):
     def rMatrix(self):
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
-            rMatrix[1, 0] = -1 * self.weight**2 * self.dipoleLength
+            rMatrix[1, 0] = -1 * self.weight ** 2 * self.dipoleLength
         else:
             rMatrix = torch.eye(6, dtype=self.dtype)
-            rMatrix[1, 0] = -1 * self.weight**2 * self.dipoleLength
+            rMatrix[1, 0] = -1 * self.weight ** 2 * self.dipoleLength
             rMatrix[4, 0] = -1 * self.weight * self.dipoleLength
 
         return rMatrix
@@ -253,7 +185,8 @@ class EdgeKick(Map):
         # initialize weight
         curvature = bendAngle / length
 
-        kernel = torch.tensor([curvature * math.tan(edgeAngle), -1 * curvature * math.tan(edgeAngle), curvature * length], dtype=dtype)
+        kernel = torch.tensor(
+            [curvature * math.tan(edgeAngle), -1 * curvature * math.tan(edgeAngle), curvature * length], dtype=dtype)
         self.weight = nn.Parameter(kernel)
 
         if dim == 4:
@@ -296,7 +229,7 @@ class EdgeKick(Map):
         xT = x.transpose(1, 0)
         momentaT = momenta.transpose(1, 0)
 
-        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1], *xT[4:],]).transpose(1, 0)
+        x = torch.stack([xT[0], momentaT[0], xT[2], momentaT[1], *xT[4:], ]).transpose(1, 0)
         return x
 
     def rMatrix(self):
@@ -315,39 +248,37 @@ class EdgeKick(Map):
         return "H={}, E1={}".format(self.curvature, self.edgeAngle)
 
 
-class SextKick(Map):
-    """Decoupled planes."""
-
-    def __init__(self, length: float, k2: float, dim: int, dtype: torch.dtype):
+class MultipoleKick(Map):
+    def __init__(self, length: float, dim: int, dtype: torch.dtype, kn: list = None, ks: list = None):
         super().__init__(dim, dtype)
-        self.length = 0.0
+        self.length = 0.0  # dummy length used to locate kick / drift locations along the ring
+        self.kickLength = length  # length used to calculate integrated multipole strengths
 
-        weight = torch.tensor([length * k2], dtype=dtype)
-        self.register_parameter("weight", nn.Parameter(weight))
+        # register multipole strengths as weights
+        if kn:
+            for i in range(1, 4):
+                weight = torch.tensor([kn[i - 1]], dtype=dtype)
+                self.register_parameter("k{}n".format(i), nn.Parameter(weight))
+        else:
+            self.k1n = nn.Parameter(torch.tensor([0, ], dtype=dtype))
+            self.k2n = nn.Parameter(torch.tensor([0, ], dtype=dtype))
+            self.k3n = nn.Parameter(torch.tensor([0, ], dtype=dtype))
 
-        if dim == 4:
-            self.forward = self.forward4D
-        elif dim == 6:
+        if ks:
+            for i in range(1, 4):
+                weight = torch.tensor([ks[i - 1]], dtype=dtype)
+                self.register_parameter("k{}s".format(i), nn.Parameter(weight))
+        else:
+            self.k1s = nn.Parameter(torch.tensor([0, ], dtype=dtype))
+            self.k2s = nn.Parameter(torch.tensor([0, ], dtype=dtype))
+            self.k3s = nn.Parameter(torch.tensor([0, ], dtype=dtype))
+
+        if dim == 6:
             self.forward = self.forward6D
         else:
             raise NotImplementedError("dim {} not supported".format(dim))
 
         return
-
-    def forward4D(self, x):
-        # get positions in reversed order
-        xPos, yPos = x[:, 0], x[:, 2]
-
-        # get updated momenta
-        dPx = -1/2 * self.weight * (xPos**2 + yPos**2)
-        dPy = self.weight * yPos * xPos
-        px = x[:, 1] + dPx
-        py = x[:, 3] + dPy
-
-        # update phase space vector
-        xT = x.transpose(1, 0)
-        x = torch.stack([xT[0], px, xT[2], py], ).transpose(1, 0)
-        return x
 
     def forward6D(self, x):
         # get positions
@@ -355,10 +286,19 @@ class SextKick(Map):
         invDelta = x[:, 7]
 
         # get updated momenta
-        dPx = -1/2 * self.weight * invDelta * (xPos**2 + yPos**2)
-        dPy = self.weight * invDelta * yPos * xPos
-        px = x[:, 1] + dPx
-        py = x[:, 3] + dPy
+        quadDPx = self.k1n * xPos - self.k1s * yPos
+        quadDPy = self.k1n * yPos + self.k1s * xPos
+
+        sextDPx = self.k2n * 1 / 2 * (xPos ** 2 + yPos ** 2) - self.k2s * xPos * yPos
+        sextDPy = self.k2n * xPos * yPos + self.k2s * 1 / 2 * (xPos ** 2 + yPos ** 2)
+
+        octDPx = self.k3n * (1 / 6 * xPos ** 3 - 1 / 2 * xPos * yPos ** 2) + self.k3s * (
+                    1 / 6 * yPos ** 3 - 1 / 2 * xPos ** 2 * yPos)
+        octDPy = self.k3n * (-1 / 6 * yPos ** 3 + 1 / 2 * xPos ** 2 * yPos) + self.k3s * (
+                    1 / 6 * xPos ** 3 - 1 / 2 * xPos * yPos ** 2)
+
+        px = x[:, 1] - self.kickLength * invDelta * (quadDPx + sextDPx + octDPx)
+        py = x[:, 3] + self.kickLength * invDelta * (quadDPy + sextDPy + octDPy)
 
         # update phase space vector
         xT = x.transpose(1, 0)
@@ -366,21 +306,32 @@ class SextKick(Map):
         return x
 
     def rMatrix(self):
-        """Not implemented yet."""
+        """Calculate transfer matrix considering only linear optics."""
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
-            # rMatrix[1, 0] = -1 * self.weight
-            # rMatrix[3, 2] = self.weight
         else:
             rMatrix = torch.eye(6, dtype=self.dtype)
-            # rMatrix[1, 0] = -1 * self.weight
-            # rMatrix[3, 2] = self.weight
+
+        rMatrix[1, 0] = -1 * self.kickLength * self.k1n
+        rMatrix[3, 2] = self.kickLength * self.k1n
+
+        rMatrix[1, 2] = self.kickLength * self.k1s
+        rMatrix[3, 0] = self.kickLength * self.k1s
 
         return rMatrix
 
     def thinMultipoleElement(self):
-        k2L = self.weight.item()
-        return "KNL={{0.0, 0.0, {k2L}}}".format(k2L=k2L)
+        integratedMultipoleStrengths = dict()
+        integratedMultipoleStrengths["k1nl"] = self.kickLength * self.k1n.item()
+        integratedMultipoleStrengths["k2nl"] = self.kickLength * self.k2n.item()
+        integratedMultipoleStrengths["k3nl"] = self.kickLength * self.k3n.item()
+
+        integratedMultipoleStrengths["k1sl"] = self.kickLength * self.k1s.item()
+        integratedMultipoleStrengths["k2sl"] = self.kickLength * self.k2s.item()
+        integratedMultipoleStrengths["k3sl"] = self.kickLength * self.k3s.item()
+
+        return "KNL={{0.0, {k1nl}, {k2nl}, {k3nl}}}, KSL={{0.0, {k1sl}, {k2sl}, {k3sl}}}".format(
+            **integratedMultipoleStrengths)
 
 
 if __name__ == "__main__":
@@ -388,7 +339,7 @@ if __name__ == "__main__":
     dtype = torch.double
 
     # set up quad
-    quad = DriftMap(1, dim, dtype)
+    quad = MultipoleKick(1, dim, dtype, ks=[1, 0.3, 0.1], )
 
     # track
     x = torch.randn((2, 9), dtype=dtype)
@@ -399,4 +350,3 @@ if __name__ == "__main__":
     print("rMatrix")
     print(quad.rMatrix())
     print(quad.thinMultipoleElement())
-
