@@ -105,18 +105,12 @@ class DipoleKick(Map):
 
         # initialize weight
         curvature = angle / length
+        kernel = torch.tensor(curvature, dtype=dtype)
+        self.weight = nn.Parameter(kernel)
 
         if dim == 4:
-            # kernel = torch.tensor([curvature ** 2 * length], dtype=dtype)
-            kernel = torch.tensor(curvature, dtype=dtype)
-            self.weight = nn.Parameter(kernel)
-
             self.forward = self.forward4D
         elif dim == 6:
-            # kernel = torch.tensor([curvature ** 2 * length, curvature * length,], dtype=dtype)
-            kernel = torch.tensor(curvature, dtype=dtype)
-            self.weight = nn.Parameter(kernel)
-
             self.forward = self.forward6D
         else:
             raise NotImplementedError("dim {} not supported".format(dim))

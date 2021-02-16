@@ -1,5 +1,6 @@
 import math
 import json
+import typing
 
 import torch
 import torch.nn as nn
@@ -14,6 +15,8 @@ class Model(nn.Module):
         self.generalProperties: dict = {"dim": dim, "dtype": dtype, "slices": slices, "order": order}
         self.dim = dim
         self.dtype = dtype
+
+        self.modelType = {"type": type(self).__name__, "dim": dim, "slices": slices, "order": order}
 
         # log element positions
         self.positions = list()
@@ -270,45 +273,26 @@ class Model(nn.Module):
 
         return twiss
 
-    def dumpJSON(self, fileHandler):
+    def dumpJSON(self, fileHandler: typing.TextIO):
         """Save model to disk."""
-        modelType = type(self).__name__
+        modelDescription = self.toJSON()
 
-        # store all weights
-        weights = [modelType, ]
-        for e in self.elements:
-            for m in e.maps:
-                weights.append(m.weight.tolist())
-
-        # dump at given location
-        json.dump(weights, fileHandler)
-
+        fileHandler.write(modelDescription)
         return
 
-    def loadJSON(self, fileHandler):
+    def loadJSON(self, fileHandler: typing.TextIO):
         """Load model from disk."""
-        weights = iter(json.load(fileHandler))
+        modelDescription = fileHandler.read()
 
-        # check if model dump is of same type as self
-        if not next(weights) == type(self).__name__:
-            raise IOError("file contains wrong model type")
-
-        for e in self.elements:
-            for m in e.maps:
-                weight = torch.tensor(next(weights), dtype=self.dtype)
-                m.weight = nn.Parameter(weight)
-
+        self.fromJSON(modelDescription)
         return
 
     def toJSON(self):
         """Return model description as string."""
-        modelType = type(self).__name__
-
         # store all weights
-        weights = [modelType, ]
+        weights = [self.modelType, ]
         for e in self.elements:
-            for m in e.maps:
-                weights.append(m.weight.tolist())
+            weights.append(e.getWeights())
 
         # return as JSON string
         return json.dumps(weights)
@@ -318,13 +302,14 @@ class Model(nn.Module):
         weights = iter(json.loads(description))
 
         # check if model dump is of same type as self
-        if not next(weights) == type(self).__name__:
+        modelType = next(weights)
+        if not modelType == self.modelType:
+            print(modelType)
+            print(self.modelType)
             raise IOError("file contains wrong model type")
 
         for e in self.elements:
-            for m in e.maps:
-                weight = torch.tensor(next(weights), dtype=self.dtype)
-                m.weight = nn.Parameter(weight)
+            e.setWeights(next(weights))
 
         return
 
@@ -735,3 +720,14 @@ if __name__ == "__main__":
     plt.plot(twiss["s"], twiss["betx"])
     plt.show()
     plt.close()
+
+    # dump to string
+    modelDescription = mod1.toJSON()
+    mod1.fromJSON(modelDescription)
+
+    # dump to file
+    with open("/dev/shm/modelDump.json", "w") as f:
+        mod1.dumpJSON(f)
+
+    with open("/dev/shm/modelDump.json", "r") as f:
+        mod1.loadJSON(f)

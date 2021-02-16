@@ -29,6 +29,22 @@ class Element(nn.Module):
 
         return rMatrix
 
+    def getWeights(self) -> list:
+        weights = list()
+        for m in self.maps:
+            weights.append(m.weight.tolist())
+
+        return weights
+
+    def setWeights(self, weights):
+        weights = iter(weights)
+
+        for m in self.maps:
+            weight = torch.tensor(next(weights), dtype=self.dtype)
+            m.weight = nn.Parameter(weight)
+
+        return
+
 
 class Drift(Element):
     def __init__(self, length: float, dim: int, slices: int, order: int, dtype: torch.dtype):
@@ -43,6 +59,8 @@ class Drift(Element):
 
     def forward(self, x):
         return self.map(x)
+
+
 
 
 class Dummy(Drift):
@@ -157,6 +175,28 @@ class MultipoleKickElement(Element):
             m.k3s = self.k3s
 
         self.maps = nn.ModuleList(self.maps * slices)
+        return
+
+    def getWeights(self) -> dict:
+        weights = dict()
+        weights["k1n"] = self.k1n.item()
+        weights["k2n"] = self.k2n.item()
+        weights["k3n"] = self.k3n.item()
+
+        weights["k1s"] = self.k1s.item()
+        weights["k2s"] = self.k2s.item()
+        weights["k3s"] = self.k3s.item()
+
+        return weights
+
+    def setWeights(self, weights: dict):
+        self.k1n = nn.Parameter(torch.tensor([weights["k1n"],], dtype=self.dtype))
+        self.k2n = nn.Parameter(torch.tensor([weights["k2n"],], dtype=self.dtype))
+        self.k3n = nn.Parameter(torch.tensor([weights["k3n"],], dtype=self.dtype))
+
+        self.k1s = nn.Parameter(torch.tensor([weights["k1s"],], dtype=self.dtype))
+        self.k2s = nn.Parameter(torch.tensor([weights["k2s"],], dtype=self.dtype))
+        self.k3s = nn.Parameter(torch.tensor([weights["k3s"],], dtype=self.dtype))
         return
 
 
