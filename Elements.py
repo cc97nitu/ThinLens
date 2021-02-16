@@ -61,8 +61,6 @@ class Drift(Element):
         return self.map(x)
 
 
-
-
 class Dummy(Drift):
     def __init__(self, length: float, dim: int, slices: int, order: int, dtype: torch.dtype):
         super(Dummy, self).__init__(length, dim, slices, order, dtype)
@@ -190,19 +188,18 @@ class MultipoleKickElement(Element):
         return weights
 
     def setWeights(self, weights: dict):
-        self.k1n = nn.Parameter(torch.tensor([weights["k1n"],], dtype=self.dtype))
-        self.k2n = nn.Parameter(torch.tensor([weights["k2n"],], dtype=self.dtype))
-        self.k3n = nn.Parameter(torch.tensor([weights["k3n"],], dtype=self.dtype))
+        self.k1n = nn.Parameter(torch.tensor([weights["k1n"], ], dtype=self.dtype))
+        self.k2n = nn.Parameter(torch.tensor([weights["k2n"], ], dtype=self.dtype))
+        self.k3n = nn.Parameter(torch.tensor([weights["k3n"], ], dtype=self.dtype))
 
-        self.k1s = nn.Parameter(torch.tensor([weights["k1s"],], dtype=self.dtype))
-        self.k2s = nn.Parameter(torch.tensor([weights["k2s"],], dtype=self.dtype))
-        self.k3s = nn.Parameter(torch.tensor([weights["k3s"],], dtype=self.dtype))
+        self.k1s = nn.Parameter(torch.tensor([weights["k1s"], ], dtype=self.dtype))
+        self.k2s = nn.Parameter(torch.tensor([weights["k2s"], ], dtype=self.dtype))
+        self.k3s = nn.Parameter(torch.tensor([weights["k3s"], ], dtype=self.dtype))
         return
 
 
 class Quadrupole(MultipoleKickElement):
     def __init__(self, length: float, k1: float, dim: int, slices: int, order: int, dtype: torch.dtype):
-
         kn = [k1, 0, 0]
         ks = [0, 0, 0]
         super().__init__(length=length, kn=kn, ks=ks, dim=dim, slices=slices, order=order, dtype=dtype)
@@ -212,8 +209,16 @@ class Quadrupole(MultipoleKickElement):
 
 class Sextupole(MultipoleKickElement):
     def __init__(self, length: float, k2: float, dim: int, slices: int, order: int, dtype: torch.dtype):
-
         kn = [0, k2, 0]
+        ks = [0, 0, 0]
+        super().__init__(length=length, kn=kn, ks=ks, dim=dim, slices=slices, order=order, dtype=dtype)
+
+        return
+
+
+class Octupole(MultipoleKickElement):
+    def __init__(self, length: float, k3n: float, dim: int, slices: int, order: int, dtype: torch.dtype):
+        kn = [0, 0, k3n]
         ks = [0, 0, 0]
         super().__init__(length=length, kn=kn, ks=ks, dim=dim, slices=slices, order=order, dtype=dtype)
 
@@ -235,4 +240,3 @@ if __name__ == "__main__":
     # track
     x = quad(x0)
     print(x)
-

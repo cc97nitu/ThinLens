@@ -10,7 +10,7 @@ import ThinLens.Maps as Maps
 
 
 class Model(nn.Module):
-    def __init__(self, dim: int = 4, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
+    def __init__(self, dim: int = 6, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
         super().__init__()
         self.generalProperties: dict = {"dim": dim, "dtype": dtype, "slices": slices, "order": order}
         self.dim = dim
