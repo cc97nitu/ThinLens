@@ -161,21 +161,13 @@ class MultipoleKickElement(Element):
                 self.maps.append(MultipoleKick(d * length / slices, dim, self.dtype))
 
         # use common weights
-        for m in self.maps:
-            if type(m) is DriftMap:
-                continue
-
-            m.k1n = self.k1n
-            m.k2n = self.k2n
-            m.k3n = self.k3n
-            m.k1s = self.k1s
-            m.k2s = self.k2s
-            m.k3s = self.k3s
+        self.shareWeights()
 
         self.maps = nn.ModuleList(self.maps * slices)
         return
 
     def getWeights(self) -> dict:
+        """Return dictionary containing multipole strengths."""
         weights = dict()
         weights["k1n"] = self.k1n.item()
         weights["k2n"] = self.k2n.item()
@@ -188,6 +180,7 @@ class MultipoleKickElement(Element):
         return weights
 
     def setWeights(self, weights: dict):
+        """Apply multipole strengths to element."""
         self.k1n = nn.Parameter(torch.tensor([weights["k1n"], ], dtype=self.dtype))
         self.k2n = nn.Parameter(torch.tensor([weights["k2n"], ], dtype=self.dtype))
         self.k3n = nn.Parameter(torch.tensor([weights["k3n"], ], dtype=self.dtype))
@@ -195,6 +188,41 @@ class MultipoleKickElement(Element):
         self.k1s = nn.Parameter(torch.tensor([weights["k1s"], ], dtype=self.dtype))
         self.k2s = nn.Parameter(torch.tensor([weights["k2s"], ], dtype=self.dtype))
         self.k3s = nn.Parameter(torch.tensor([weights["k3s"], ], dtype=self.dtype))
+
+        self.shareWeights()
+        return
+
+    def shareWeights(self):
+        """Make maps use weights of parent element."""
+        for m in self.maps:
+            if type(m) is DriftMap:
+                continue
+
+            m.k1n = self.k1n
+            m.k2n = self.k2n
+            m.k3n = self.k3n
+            m.k1s = self.k1s
+            m.k2s = self.k2s
+            m.k3s = self.k3s
+
+        return
+
+    def suppressMultipoles(self, threshold: float):
+        """Remove any multipole component smaller than threshold."""
+        if torch.abs(self.k1n.item()) < threshold:
+            self.k1n = nn.Parameter(torch.zeros(1, dtype=self.dtype), requires_grad=self.k1n.requires_grad)
+        if torch.abs(self.k2n.item()) < threshold:
+            self.k2n = nn.Parameter(torch.zeros(1, dtype=self.dtype), requires_grad=self.k2n.requires_grad)
+        if torch.abs(self.k3n.item()) < threshold:
+            self.k3n = nn.Parameter(torch.zeros(1, dtype=self.dtype), requires_grad=self.k3n.requires_grad)
+        if torch.abs(self.k1s.item()) < threshold:
+            self.k1s = nn.Parameter(torch.zeros(1, dtype=self.dtype), requires_grad=self.k1s.requires_grad)
+        if torch.abs(self.k2s.item()) < threshold:
+            self.k2s = nn.Parameter(torch.zeros(1, dtype=self.dtype), requires_grad=self.k2s.requires_grad)
+        if torch.abs(self.k3s.item()) < threshold:
+            self.k3s = nn.Parameter(torch.zeros(1, dtype=self.dtype), requires_grad=self.k3s.requires_grad)
+
+        self.shareWeights()
         return
 
 
@@ -229,7 +257,7 @@ if __name__ == "__main__":
     dim = 6
     order = 2
     slices = 4
-    dtype = torch.float32
+    dtype = torch.float16
 
     drift = Drift(3, dim=dim, order=order, slices=slices, dtype=dtype)
     quad = Sextupole(1, 0.3, dim=dim, order=order, slices=slices, dtype=dtype)
@@ -238,5 +266,15 @@ if __name__ == "__main__":
     x0 = torch.tensor([[1e-3, 2e-3, 1e-3, 0, 0, 0, 0, 1, 1], ])
 
     # track
-    x = quad(x0)
+    turns = 2000
+    x = x0.detach().clone()
+    for i in range(turns):
+        x = drift(x)
+
     print(x)
+
+    inverseDrift = Drift(-3, dim=dim, order=order, slices=slices, dtype=dtype)
+    for i in range(turns):
+        x = inverseDrift(x)
+
+    print(x - x0)
