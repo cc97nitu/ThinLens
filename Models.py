@@ -9,6 +9,14 @@ import ThinLens.Elements as Elements
 import ThinLens.Maps as Maps
 
 
+class TwissFailed(ValueError):
+    """Indicate a problem with twiss-calculation."""
+    def __init__(self, message):
+        self.message = message
+        super(TwissFailed, self).__init__(self.message)
+        return
+
+
 class Model(nn.Module):
     def __init__(self, dim: int = 6, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
         super().__init__()
@@ -167,11 +175,21 @@ class Model(nn.Module):
         """Calculate twiss parameters of periodic solution at lattice start."""
         oneTurnMap = self.rMatrix()
 
+        # verify absence of coupling
+        xyCoupling = oneTurnMap[:2, 2:4]
+        yxCoupling = oneTurnMap[2:4, :2]
+        couplingIndicator = torch.norm(xyCoupling) + torch.norm(yxCoupling)
+
+        if couplingIndicator != 0:
+            raise TwissFailed("coupled motion detected")
+
+        # does a stable solution exist?
         cosMuX = 1 / 2 * oneTurnMap[:2, :2].trace()
 
         if torch.abs(cosMuX) > 1:
-            raise ValueError("no periodic solution, cosine(phaseAdvance) out of bounds")
+            raise TwissFailed("no periodic solution, cosine(phaseAdvance) out of bounds")
 
+        # calculate twiss from one-turn map
         sinMuX = torch.sign(oneTurnMap[0, 1]) * torch.sqrt(1 - cosMuX ** 2)
         betaX0 = oneTurnMap[0, 1] / sinMuX
         alphaX0 = 1 / (2 * sinMuX) * (oneTurnMap[0, 0] - oneTurnMap[1, 1])
