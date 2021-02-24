@@ -173,9 +173,7 @@ class EdgeKick(Map):
         self.edgeAngle = edgeAngle
 
         # initialize weight
-        curvature = bendAngle / length
-
-        kernel = torch.tensor(curvature * length, dtype=dtype)
+        kernel = torch.tensor(math.tan(self.edgeAngle), dtype=dtype)
         self.weight = nn.Parameter(kernel)
 
         if dim == 4:
@@ -192,7 +190,7 @@ class EdgeKick(Map):
         pos = x[:, [0, 2]]
 
         # get updated momenta
-        momenta = self.weight * pos
+        momenta = self.curvature * self.weight * torch.tensor([1, -1], dtype=self.dtype) * pos
         momenta = momenta + x[:, [1, 3]]
 
         # update phase space vector
@@ -208,7 +206,7 @@ class EdgeKick(Map):
         velocityRatio = x[:, 8]
 
         # get updated momenta
-        momenta = self.weight * pos
+        momenta = self.curvature * self.weight * torch.tensor([1, -1], dtype=self.dtype) * pos
         momenta = momenta + x[:, [1, 3]]
 
         # sigma = -1 * velocityRatio * pos[0] * self.weight[2]
@@ -224,12 +222,11 @@ class EdgeKick(Map):
     def rMatrix(self):
         if self.dim == 4:
             rMatrix = torch.eye(4, dtype=self.dtype)
-            rMatrix[1, 0] = self.curvature * math.tan(self.edgeAngle)
-            rMatrix[3, 2] = -1 * self.curvature * math.tan(self.edgeAngle)
         else:
             rMatrix = torch.eye(6, dtype=self.dtype)
-            rMatrix[1, 0] = self.curvature * math.tan(self.edgeAngle)
-            rMatrix[3, 2] = -1 * self.curvature * math.tan(self.edgeAngle)
+
+        rMatrix[1, 0] = self.curvature * math.tan(self.edgeAngle)
+        rMatrix[3, 2] = -1 * self.curvature * math.tan(self.edgeAngle)
 
         return rMatrix
 
