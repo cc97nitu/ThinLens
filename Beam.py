@@ -64,6 +64,8 @@ class Beam(object):
         # check if nan occurs in bunch <- can be if sige is too large and hence energy is smaller than rest energy
         assert not self.bunch.isnan().any()
 
+        self.bunch.double()
+
         return
 
     def fromDelta(self, delta: torch.tensor):
