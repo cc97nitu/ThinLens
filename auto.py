@@ -3,6 +3,7 @@ import torch.autograd
 
 import time
 
+from Beam import Beam
 from Maps import DriftMap
 
 # set up particle
@@ -29,6 +30,8 @@ z.retain_grad()
 
 z.backward(retain_graph=True)
 
+print("part.grad: ", part.grad)
+part.grad = None
 
 # perform grad check?
 test = torch.autograd.gradcheck(drift, part)
@@ -83,12 +86,15 @@ class autoDrift(torch.autograd.Function):
 
         gradWeight = first + third + fifth
 
-        print(gradWeight)
         return gradInputs, gradWeight
 
 
-myWeight = torch.tensor([3.], requires_grad=True)
+myWeight = torch.tensor(driftLength, dtype=torch.double, requires_grad=True)
 myDrift = autoDrift.apply
+
+# # perform grad check?
+# test = torch.autograd.gradcheck(myDrift, (part, myWeight),)
+# print("result of gradcheck for autograd function: ", test)
 
 # monitor memory consumption
 with torch.autograd.profiler.profile() as prof:
@@ -97,17 +103,35 @@ with torch.autograd.profiler.profile() as prof:
 
     y.sum().backward()
 
-# benchmark
-t0 = time.time()
-model = list()
-for i in range(100000):
-    # model.append(DriftMap(driftLength, dim=6, dtype=torch.double))
+# # benchmark
+# t0 = time.time()
+# model = list()
+# for i in range(100000):
+#     # model.append(DriftMap(driftLength, dim=6, dtype=torch.double))
+#
+#     w = torch.tensor([3.], dtype=torch.double, requires_grad=True)
+#     model.append(lambda x: autoDrift.apply(x, w))
+#
+# y = part
+# for m in model:
+#     y = m(y)
+#
+# print("completed within {:.2f}s".format(time.time() - t0))
 
-    w = torch.tensor([3.], dtype=torch.double, requires_grad=True)
-    model.append(lambda x: autoDrift.apply(x, w))
+# calculate jacobian
+jaco = torch.autograd.functional.jacobian(drift, part[0].unsqueeze(0))
+print(jaco)
 
-y = part
-for m in model:
-    y = m(y)
+part.grad = None
 
-print("completed within {:.2f}s".format(time.time() - t0))
+myJacobian = torch.autograd.functional.jacobian(lambda x: autoDrift.apply(x, myWeight), part[0].unsqueeze(0))
+print(myJacobian)
+
+# do compare
+beam = Beam(mass=18.798, energy=19.0, exn=1.258e-6, eyn=2.005e-6, sigt=0.01, sige=0.005, particles=int(1e3))
+
+randnBunch = torch.randn((1000, 9))
+theirBunch = drift(randnBunch)
+myBunch = myDrift(randnBunch, myWeight)
+
+print("tracking results identical: ", torch.allclose(theirBunch, myBunch))
