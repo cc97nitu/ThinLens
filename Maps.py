@@ -42,7 +42,7 @@ class DriftMap(Map):
         return ThinLens.Transformations.Drift.apply(*bunch, self.weight)
 
     def rMatrix(self):
-        rMatrix = torch.eye(6, dtype=self.dtype)
+        rMatrix = torch.eye(6, dtype=torch.double)
         rMatrix[0, 1] = self.weight
         rMatrix[2, 3] = self.weight
 
@@ -68,7 +68,7 @@ class DipoleKick(Map):
         return ThinLens.Transformations.DipoleKick.apply(*bunch, self.lengthTensor, self.weight)
 
     def rMatrix(self):
-        rMatrix = torch.eye(6, dtype=self.dtype)
+        rMatrix = torch.eye(6, dtype=torch.double)
         rMatrix[1, 0] = -1 * self.weight ** 2 * self.dipoleLength
         rMatrix[4, 0] = -1 * self.weight * self.dipoleLength
 
@@ -100,7 +100,7 @@ class EdgeKick(Map):
         return ThinLens.Transformations.EdgeKick.apply(*bunch, self.weight, self.curvatureTensor)
 
     def rMatrix(self):
-        rMatrix = torch.eye(6, dtype=self.dtype)
+        rMatrix = torch.eye(6, dtype=torch.double)
 
         rMatrix[1, 0] = self.curvature * math.tan(self.edgeAngle)
         rMatrix[3, 2] = -1 * self.curvature * math.tan(self.edgeAngle)
@@ -145,10 +145,7 @@ class MultipoleKick(Map):
 
     def rMatrix(self):
         """Calculate transfer matrix considering only linear optics."""
-        if self.dim == 4:
-            rMatrix = torch.eye(4, dtype=self.dtype)
-        else:
-            rMatrix = torch.eye(6, dtype=self.dtype)
+        rMatrix = torch.eye(6, dtype=torch.double)
 
         rMatrix[1, 0] = -1 * self.kickLength * self.k1n
         rMatrix[3, 2] = self.kickLength * self.k1n

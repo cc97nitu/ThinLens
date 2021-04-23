@@ -19,13 +19,11 @@ class TwissFailed(ValueError):
 
 
 class Model(nn.Module):
-    def __init__(self, dim: int = 6, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
+    def __init__(self, slices: int = 1, order: int = 2):
         super().__init__()
-        self.generalProperties: dict = {"dim": dim, "dtype": dtype, "slices": slices, "order": order}
-        self.dim = dim
-        self.dtype = dtype
+        self.generalProperties: dict = {"slices": slices, "order": order}
 
-        self.modelType = {"type": type(self).__name__, "dim": dim, "slices": slices, "order": order}
+        self.modelType = {"type": type(self).__name__, "slices": slices, "order": order}
 
         # log element positions
         self.positions = list()
@@ -37,13 +35,20 @@ class Model(nn.Module):
 
         return
 
-    def forward(self, x, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False):
+    def forward(self, x: torch.tensor, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False):
+        # create lose bunch
+        x = x.unbind(0)
+
         if outputPerElement:
             outputs = list()
             for turn in range(nTurns):
                 for e in self.elements:
                     x = e(x)
                     outputs.append(x)
+
+            # merge coordinates into single bunch
+            for i in range(len(outputs)):
+                outputs[i] = torch.stack(outputs[i], dim=1)
 
             return torch.stack(outputs).permute(1, 2, 0)  # particle, dim, element
         elif outputAtBPM:
@@ -55,13 +60,17 @@ class Model(nn.Module):
                     if type(e) is Elements.Monitor:
                         outputs.append(x)
 
+            # merge coordinates into single bunch
+            for i in range(len(outputs)):
+                outputs[i] = torch.stack(outputs[i], dim=1)
+
             return torch.stack(outputs).permute(1, 2, 0)  # particle, dim, element
         else:
             for turn in range(nTurns):
                 for e in self.elements:
                     x = e(x)
 
-            return x
+            return torch.stack(x, dim=1)
 
     def logElementPositions(self):
         """Store beginning and end of each element."""
@@ -80,7 +89,7 @@ class Model(nn.Module):
 
     def rMatrix(self):
         """Obtain linear transfer matrix."""
-        rMatrix = torch.eye(self.dim, dtype=self.dtype)
+        rMatrix = torch.eye(6, dtype=torch.double)
 
         for element in self.elements:
             rMatrix = torch.matmul(element.rMatrix(), rMatrix)
@@ -164,13 +173,10 @@ class Model(nn.Module):
         xTrace = oneTurnMap[:2, :2].trace()
         xTune = torch.acos(1 / 2 * xTrace).item() / (2 * math.pi)
 
-        if self.dim == 4 or self.dim == 6:
-            yTrace = oneTurnMap[2:4, 2:4].trace()
-            yTune = torch.acos(1 / 2 * yTrace).item() / (2 * math.pi)
+        yTrace = oneTurnMap[2:4, 2:4].trace()
+        yTune = torch.acos(1 / 2 * yTrace).item() / (2 * math.pi)
 
-            return [xTune, yTune]
-
-        return [xTune, ]
+        return [xTune, yTune]
 
     def getInitialTwiss(self):
         """Calculate twiss parameters of periodic solution at lattice start."""
@@ -195,60 +201,51 @@ class Model(nn.Module):
         betaX0 = oneTurnMap[0, 1] / sinMuX
         alphaX0 = 1 / (2 * sinMuX) * (oneTurnMap[0, 0] - oneTurnMap[1, 1])
 
-        if self.dim == 4 or self.dim == 6:
-            cosMuY = 1 / 2 * oneTurnMap[2:4, 2:4].trace()
+        cosMuY = 1 / 2 * oneTurnMap[2:4, 2:4].trace()
 
-            if torch.abs(cosMuX) > 1:
-                raise ValueError("no periodic solution, cosine(phaseAdvance) out of bounds")
+        if torch.abs(cosMuX) > 1:
+            raise ValueError("no periodic solution, cosine(phaseAdvance) out of bounds")
 
-            sinMuY = torch.sign(oneTurnMap[2, 3]) * torch.sqrt(1 - cosMuY ** 2)
-            betaY0 = oneTurnMap[2, 3] / sinMuY
-            alphaY0 = 1 / (2 * sinMuY) * (oneTurnMap[2, 2] - oneTurnMap[3, 3])
+        sinMuY = torch.sign(oneTurnMap[2, 3]) * torch.sqrt(1 - cosMuY ** 2)
+        betaY0 = oneTurnMap[2, 3] / sinMuY
+        alphaY0 = 1 / (2 * sinMuY) * (oneTurnMap[2, 2] - oneTurnMap[3, 3])
 
-            return tuple([betaX0, alphaX0]), tuple([betaY0, alphaY0])
-
-        return tuple([betaX0, alphaX0])
+        return tuple([betaX0, alphaX0]), tuple([betaY0, alphaY0])
 
     def twissTransportMatrix(self, rMatrix: torch.Tensor):
         """Convert transport matrix into twiss transport matrix."""
-        if (self.dim != 4) and (self.dim != 6):
-            raise NotImplementedError("twiss calculation not implemented for 2D-case")
-
         # x-plane
         xMat = rMatrix[:2, :2]
         c, cp, s, sp = xMat[0, 0], xMat[1, 0], xMat[0, 1], xMat[1, 1]
 
         twissTransportX = torch.tensor([[c ** 2, -2 * s * c, s ** 2],
                                         [-1 * c * cp, s * cp + sp * c, -1 * s * sp],
-                                        [cp ** 2, -2 * sp * cp, sp ** 2], ], dtype=self.dtype)
+                                        [cp ** 2, -2 * sp * cp, sp ** 2], ], dtype=torch.double)
 
-        # x-plane
+        # y-plane
         yMat = rMatrix[2:4, 2:4]
         c, cp, s, sp = yMat[0, 0], yMat[1, 0], yMat[0, 1], yMat[1, 1]
 
         twissTransportY = torch.tensor([[c ** 2, -2 * s * c, s ** 2],
                                         [-1 * c * cp, s * cp + sp * c, -1 * s * sp],
-                                        [cp ** 2, -2 * sp * cp, sp ** 2], ], dtype=self.dtype)
+                                        [cp ** 2, -2 * sp * cp, sp ** 2], ], dtype=torch.double)
 
         return twissTransportX, twissTransportY
 
     def getTwiss(self):
-        if (self.dim != 4) and (self.dim != 6):
-            raise NotImplementedError("twiss calculation not implemented for 2D-case")
-
         # get initial twiss
         twissX0, twissY0 = self.getInitialTwiss()
 
         pos = [0, ]
         betaX, alphaX, betaY, alphaY = [twissX0[0]], [twissX0[1]], [twissY0[0]], [twissY0[1]]
-        twissX0 = torch.tensor([betaX[-1], alphaX[-1], (1 + alphaX[-1] ** 2) / betaX[-1]], dtype=self.dtype)
-        twissY0 = torch.tensor([betaY[-1], alphaY[-1], (1 + alphaY[-1] ** 2) / betaY[-1]], dtype=self.dtype)
+        twissX0 = torch.tensor([betaX[-1], alphaX[-1], (1 + alphaX[-1] ** 2) / betaX[-1]], dtype=torch.double)
+        twissY0 = torch.tensor([betaY[-1], alphaY[-1], (1 + alphaY[-1] ** 2) / betaY[-1]], dtype=torch.double)
 
         lengths = [0, ]
         mux = [0, ]
 
         # calculate twiss along lattice
-        rMatrix = torch.eye(self.dim, dtype=self.dtype)
+        rMatrix = torch.eye(6, dtype=torch.double)
 
         for element in self.elements:
             for m in element.maps:
@@ -274,21 +271,21 @@ class Model(nn.Module):
 
         # store results
         twiss = dict()
-        twiss["s"] = torch.tensor(pos, dtype=self.dtype)
+        twiss["s"] = torch.tensor(pos, dtype=torch.double)
 
-        twiss["betx"] = torch.tensor(betaX, dtype=self.dtype)
-        twiss["alfx"] = torch.tensor(alphaX, dtype=self.dtype)
-        twiss["bety"] = torch.tensor(betaY, dtype=self.dtype)
-        twiss["alfy"] = torch.tensor(alphaY, dtype=self.dtype)
+        twiss["betx"] = torch.tensor(betaX, dtype=torch.double)
+        twiss["alfx"] = torch.tensor(alphaX, dtype=torch.double)
+        twiss["bety"] = torch.tensor(betaY, dtype=torch.double)
+        twiss["alfy"] = torch.tensor(alphaY, dtype=torch.double)
 
         # # calculate phase advance
-        # twiss["mux"] = torch.cumsum(torch.tensor(mux, dtype=self.dtype), dim=0)
+        # twiss["mux"] = torch.cumsum(torch.tensor(mux, dtype=torch.double), dim=0)
         # twiss["muy"] = torch.cumsum(1/twiss["bety"], dim=0)
-        # # twiss["mux"] = torch.tensor(mux, dtype=self.dtype)
+        # # twiss["mux"] = torch.tensor(mux, dtype=torch.double)
         #
-        # lengths = torch.tensor(lengths, dtype=self.dtype)
+        # lengths = torch.tensor(lengths, dtype=torch.double)
         # mux = [torch.trapz(1/twiss["betx"][:i+1], lengths[:i+1]) for i in range(len(twiss["betx"]))]
-        # twiss["mux"] = torch.tensor(mux, dtype=self.dtype)
+        # twiss["mux"] = torch.tensor(mux, dtype=torch.double)
 
         return twiss
 
@@ -334,8 +331,8 @@ class Model(nn.Module):
 
 
 class F0D0Model(Model):
-    def __init__(self, k1: float, dim: int = 6, slices: int = 1, order: int = 2, dtype: torch.dtype = torch.float32):
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+    def __init__(self, k1: float, slices: int = 1, order: int = 2):
+        super().__init__(slices=slices, order=order)
 
         # define elements
         d1 = Elements.Drift(1, **self.generalProperties)
@@ -350,9 +347,8 @@ class F0D0Model(Model):
 
 
 class RBendLine(Model):
-    def __init__(self, angle: float, e1: float, e2: float, dim: int = 4, slices: int = 1, order: int = 2,
-                 dtype: torch.dtype = torch.float32):
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+    def __init__(self, angle: float, e1: float, e2: float, slices: int = 1, order: int = 2):
+        super().__init__(slices=slices, order=order)
 
         # define beam line
         d1 = Elements.Drift(1, **self.generalProperties)
@@ -366,10 +362,10 @@ class RBendLine(Model):
 
 
 class SIS18_Cell_minimal(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 6, slices: int = 1,
-                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, slices: int = 1,
+                 order: int = 2, quadSliceMultiplicity: int = 4):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        super().__init__(slices=slices, order=order)
 
         # specify beam line elements
         rb1 = Elements.RBen(length=2.617993878, angle=0.2617993878, e1=0.1274090354, e2=0.1274090354,
@@ -402,10 +398,10 @@ class SIS18_Cell_minimal(Model):
 
 
 class SIS18_Cell_minimal_noDipoles(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 6, slices: int = 1,
-                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, slices: int = 1,
+                 order: int = 2, quadSliceMultiplicity: int = 4):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        super().__init__(slices=slices, order=order)
 
         # specify beam line elements
         d3 = Elements.Drift(6.839011704000001, **self.generalProperties)
@@ -431,11 +427,9 @@ class SIS18_Cell_minimal_noDipoles(Model):
 
 
 class SIS18_Cell(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, k2f: float = 0, k2d: float = 0,
-                 dim: int = 6, slices: int = 1,
-                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        super().__init__(slices=slices, order=order)
         self.quadSliceMultiplicity = quadSliceMultiplicity
 
         # define beam line elements
@@ -490,10 +484,10 @@ class SIS18_Cell(Model):
 
 
 class SIS18_Lattice_minimal(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, dim: int = 6, slices: int = 1,
-                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, slices: int = 1,
+                 order: int = 2, quadSliceMultiplicity: int = 4):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        super().__init__(slices=slices, order=order)
 
         # quadrupoles shall be sliced more due to their strong influence on tunes
         quadrupoleGeneralProperties = dict(self.generalProperties)
@@ -536,12 +530,9 @@ class SIS18_Lattice_minimal(Model):
 
 
 class SIS18_Lattice(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, k2f: float = 0, k2d: float = 0,
-                 dim: int = 6, slices: int = 1,
-                 order: int = 2, quadSliceMultiplicity: int = 4, dtype: torch.dtype = torch.float32,
-                 cellsIdentical: bool = False):
+    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4, cellsIdentical: bool = False):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
-        super().__init__(dim=dim, slices=slices, order=order, dtype=dtype)
+        super().__init__(slices=slices, order=order)
         self.quadSliceMultiplicity = quadSliceMultiplicity
 
         # quadrupoles shall be sliced more due to their strong influence on tunes
@@ -669,11 +660,8 @@ if __name__ == "__main__":
 
     torch.set_printoptions(precision=4, sci_mode=True)
 
-    dtype = torch.double
-    dim = 6
-
     # set up models
-    mod1 = SIS18_Cell(dtype=dtype, dim=dim, slices=4, quadSliceMultiplicity=4)
+    mod1 = SIS18_Lattice(slices=4, quadSliceMultiplicity=4)
 
     # show initial twiss
     print("initial twiss")

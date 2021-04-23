@@ -20,7 +20,7 @@ class Element(nn.Module):
         return bunch
 
     def rMatrix(self):
-        rMatrix = torch.eye(self.dim, dtype=self.dtype)
+        rMatrix = torch.eye(6, dtype=torch.double)
 
         for m in self.maps:
             rMatrix = torch.matmul(m.rMatrix(), rMatrix)
@@ -38,7 +38,7 @@ class Element(nn.Module):
         weights = iter(weights)
 
         for m in self.maps:
-            weight = torch.tensor(next(weights), dtype=self.dtype)
+            weight = torch.tensor(next(weights), dtype=torch.double)
             m.weight = nn.Parameter(weight)
 
         return
