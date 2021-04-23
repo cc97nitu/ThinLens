@@ -37,7 +37,7 @@ class Model(nn.Module):
 
     def forward(self, x: torch.tensor, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False):
         # create lose bunch
-        x = x.unbind(0)
+        x = x.transpose(1, 0).unbind(0)
 
         if outputPerElement:
             outputs = list()
@@ -655,8 +655,6 @@ class SIS18_Lattice(Model):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-
-    import ThinLens.Maps
 
     torch.set_printoptions(precision=4, sci_mode=True)
 
