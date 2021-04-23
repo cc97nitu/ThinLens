@@ -38,7 +38,7 @@ class DriftMap(Map):
 
         return
 
-    def forward(self, bunch):
+    def forward(self, bunch: tuple):
         return ThinLens.Transformations.Drift.apply(*bunch, self.weight)
 
     def rMatrix(self):
@@ -64,7 +64,7 @@ class DipoleKick(Map):
 
         return
 
-    def forward(self, bunch):
+    def forward(self, bunch: tuple):
         return ThinLens.Transformations.DipoleKick.apply(*bunch, self.lengthTensor, self.weight)
 
     def rMatrix(self):
@@ -96,7 +96,7 @@ class EdgeKick(Map):
 
         return
 
-    def forward(self, bunch):
+    def forward(self, bunch: tuple):
         return ThinLens.Transformations.EdgeKick.apply(*bunch, self.weight, self.curvatureTensor)
 
     def rMatrix(self):
@@ -139,7 +139,7 @@ class MultipoleKick(Map):
 
         return
 
-    def forward(self, bunch):
+    def forward(self, bunch: tuple):
         return ThinLens.Transformations.ThinMultipole.apply(*bunch, self.kickLength, self.k1n, self.k2n, self.k1s,
                                                             self.k2s)
 

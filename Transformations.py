@@ -82,7 +82,7 @@ class ThinMultipole(torch.autograd.Function):
 
         # phase space gradients
         newGradX = gradX + length * invDelta * (
-                    (k1s + k2s * x + k2n * y) * gradYp + -1 * (k1n + k2n * x - k2s * y) * gradXp)
+                (k1s + k2s * x + k2n * y) * gradYp + -1 * (k1n + k2n * x - k2s * y) * gradXp)
         newGradY = gradY + length * invDelta * ((k1s + k2n * x + k2s * y) * gradXp + (k1n - k2s * y + k2n * x) * gradYp)
 
         focX = (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
@@ -126,7 +126,7 @@ class EdgeKick(torch.autograd.Function):
         # phase-space gradients
         newGradX = gradX + weight * curvature * sqrtDelta * gradXp
         newGradY = gradY - weight * curvature * sqrtDelta * gradYp
-        newGradDelta = gradDelta + weight * curvature * 1/(2 * sqrtDelta) * (x * gradXp - y * gradYp)
+        newGradDelta = gradDelta + weight * curvature * 1 / (2 * sqrtDelta) * (x * gradXp - y * gradYp)
 
         # weight gradient
         if ctx.needs_input_grad[9]:
@@ -155,7 +155,7 @@ class DipoleKick(torch.autograd.Function):
         length, curvature, x, y, delta, vR = ctx.saved_tensors
 
         # phase-space gradients
-        newGradX = gradX - curvature**2 * length * gradXp - curvature * length * vR * gradSigma
+        newGradX = gradX - curvature ** 2 * length * gradXp - curvature * length * vR * gradSigma
         newGradDelta = gradDelta + curvature * length * gradXp
         newGradVR = gradVR - curvature * length * x * gradSigma
 
@@ -165,7 +165,8 @@ class DipoleKick(torch.autograd.Function):
         if ctx.needs_input_grad[9]:
             gradLength = curvature * (delta - curvature * x) * gradXp - curvature * vR * x * gradSigma
         if ctx.needs_input_grad[10]:
-            gradCurvature = (length * (delta - curvature * x) - length * curvature * x) * gradXp - length * vR * x * gradSigma
+            gradCurvature = (length * (
+                    delta - curvature * x) - length * curvature * x) * gradXp - length * vR * x * gradSigma
 
         return newGradX, gradXp, gradY, gradYp, gradSigma, gradPSigma, newGradDelta, gradInvDelta, newGradVR, gradLength, gradCurvature
 
@@ -252,5 +253,3 @@ if __name__ == "__main__":
 
     checkDip = gradcheck(dipMap, inp, eps=1e-6, atol=1e-4)
     print("check result for DipoleKick: {}".format(checkDip))
-
-
