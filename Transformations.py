@@ -25,7 +25,10 @@ class Drift(torch.autograd.Function):
         newGradYp = gradYp + length * gradY
         newGradVR = gradVR - length * gradSigma
 
-        gradLength = xp * gradX + yp * gradY + (1 - vR) * gradSigma
+        if ctx.needs_input_grad[9]:
+            gradLength = xp * gradX + yp * gradY + (1 - vR) * gradSigma
+        else:
+            gradLength = None
 
         return gradX, newGradXp, gradY, newGradYp, gradSigma, gradPSigma, gradDelta, gradInvDelta, newGradVR, gradLength
 
@@ -87,11 +90,18 @@ class ThinMultipole(torch.autograd.Function):
         newGradInvDelta = gradInvDelta + length * (-1 * focX * gradXp + focY * gradYp)
 
         # weight gradients
-        gradLength = invDelta * (-1 * focX * gradXp + focY * gradYp)
-        gradK1n = length * invDelta * (-1 * (x * gradXp) + y * gradYp)
-        gradK1s = length * invDelta * (y * gradXp + x * gradYp)
-        gradK2n = length * invDelta * (-1 * (1 / 2 * (x ** 2 - y ** 2) * gradXp) + x * y * gradYp)
-        gradK2s = length * invDelta * (x * y * gradXp + 1 / 2 * (x ** 2 - y ** 2) * gradYp)
+        gradLength = gradK1n = gradK2n = gradK1s = gradK2s = None
+
+        if ctx.needs_input_grad[9]:
+            gradLength = invDelta * (-1 * focX * gradXp + focY * gradYp)
+        if ctx.needs_input_grad[10]:
+            gradK1n = length * invDelta * (-1 * (x * gradXp) + y * gradYp)
+        if ctx.needs_input_grad[11]:
+            gradK2n = length * invDelta * (-1 * (1 / 2 * (x ** 2 - y ** 2) * gradXp) + x * y * gradYp)
+        if ctx.needs_input_grad[12]:
+            gradK1s = length * invDelta * (y * gradXp + x * gradYp)
+        if ctx.needs_input_grad[13]:
+            gradK2s = length * invDelta * (x * y * gradXp + 1 / 2 * (x ** 2 - y ** 2) * gradYp)
 
         return newGradX, gradXp, newGradY, gradYp, gradSigma, gradPSigma, gradDelta, newGradInvDelta, gradVR, gradLength, gradK1n, gradK2n, gradK1s, gradK2s
 
@@ -119,10 +129,12 @@ class EdgeKick(torch.autograd.Function):
         newGradDelta = gradDelta + weight * curvature * 1/(2 * sqrtDelta) * (x * gradXp - y * gradYp)
 
         # weight gradient
-        gradWeight = curvature * sqrtDelta * x * gradXp - curvature * sqrtDelta * y * gradYp
+        if ctx.needs_input_grad[9]:
+            gradWeight = curvature * sqrtDelta * x * gradXp - curvature * sqrtDelta * y * gradYp
+        else:
+            gradWeight = None
 
         return newGradX, gradXp, newGradY, gradYp, gradSigma, gradPSigma, newGradDelta, gradInvDelta, gradVR, gradWeight, None
-
 
 
 class DipoleKick(torch.autograd.Function):
@@ -148,8 +160,12 @@ class DipoleKick(torch.autograd.Function):
         newGradVR = gradVR - curvature * length * x * gradSigma
 
         # weight gradients
-        gradLength = curvature * (delta - curvature * x) * gradXp - curvature * vR * x * gradSigma
-        gradCurvature = (length * (delta - curvature * x) - length * curvature * x) * gradXp - length * vR * x * gradSigma
+        gradLength = gradCurvature = None
+
+        if ctx.needs_input_grad[9]:
+            gradLength = curvature * (delta - curvature * x) * gradXp - curvature * vR * x * gradSigma
+        if ctx.needs_input_grad[10]:
+            gradCurvature = (length * (delta - curvature * x) - length * curvature * x) * gradXp - length * vR * x * gradSigma
 
         return newGradX, gradXp, gradY, gradYp, gradSigma, gradPSigma, newGradDelta, gradInvDelta, newGradVR, gradLength, gradCurvature
 
