@@ -530,7 +530,8 @@ class SIS18_Lattice_minimal(Model):
 
 
 class SIS18_Lattice(Model):
-    def __init__(self, k1f: float = 3.12391e-01, k1d: float = -4.78047e-01, k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4, cellsIdentical: bool = False):
+    def __init__(self, k1f: float = 0.3543297463737786, k1d: float = -0.2768661708562728, k1fSupport: float = 0, k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4, cellsIdentical: bool = False):
+        self.k1f = k1f
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(slices=slices, order=order)
         self.quadSliceMultiplicity = quadSliceMultiplicity
@@ -581,7 +582,7 @@ class SIS18_Lattice(Model):
 
             qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **quadrupoleGeneralProperties)
             qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
-            qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
+            qs3t = Elements.Quadrupole(length=0.4804, k1=k1fSupport, **quadrupoleGeneralProperties)
 
             for i in range(12):
                 cell = [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a,
@@ -632,7 +633,7 @@ class SIS18_Lattice(Model):
 
                 qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **quadrupoleGeneralProperties)
                 qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
-                qs3t = Elements.Quadrupole(length=0.4804, k1=2 * k1f, **quadrupoleGeneralProperties)
+                qs3t = Elements.Quadrupole(length=0.4804, k1=k1fSupport, **quadrupoleGeneralProperties)
 
                 cell = [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a,
                         ks3c,
@@ -659,7 +660,7 @@ if __name__ == "__main__":
     torch.set_printoptions(precision=4, sci_mode=True)
 
     # set up models
-    mod1 = SIS18_Lattice(slices=4, quadSliceMultiplicity=4)
+    mod1 = SIS18_Lattice(slices=10, quadSliceMultiplicity=10)
 
     # show initial twiss
     print("initial twiss")
@@ -686,3 +687,4 @@ if __name__ == "__main__":
 
     with open("/dev/shm/modelDump.json", "r") as f:
         mod1.loadJSON(f)
+

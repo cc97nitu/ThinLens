@@ -165,8 +165,20 @@ class MultipoleKick(Map):
         integratedMultipoleStrengths["k2sl"] = self.kickLength.item() * self.k2s.item()
         integratedMultipoleStrengths["k3sl"] = self.kickLength.item() * self.k3s.item()
 
-        return "KNL={{0.0, {k1nl}, {k2nl}, {k3nl}}}, KSL={{0.0, {k1sl}, {k2sl}, {k3sl}}}".format(
-            **integratedMultipoleStrengths)
+        if self.k1n.item() > 0:
+            print("FOUND quad")
+            print(self.k1n.item())
+            return "KNL:={{0.0, {k1nl}, {k2nl}, {k3nl}}}, KSL={{0.0, {k1sl}, {k2sl}, {k3sl}}}".format(
+                **integratedMultipoleStrengths)
+        elif self.k1n.item() < 0:
+            print("FOUND quad")
+            print(self.k1n.item())
+
+            return "KNL:={{0.0, {k1nl}, {k2nl}, {k3nl}}}, KSL={{0.0, {k1sl}, {k2sl}, {k3sl}}}".format(
+                **integratedMultipoleStrengths)
+        else:
+            return "KNL={{0.0, {k1nl}, {k2nl}, {k3nl}}}, KSL={{0.0, {k1sl}, {k2sl}, {k3sl}}}".format(
+                **integratedMultipoleStrengths)
 
 
 if __name__ == "__main__":
