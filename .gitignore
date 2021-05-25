@@ -3,3 +3,4 @@
 *.pyc
 **/venv/
 .idea/
+**/.ipynb_checkpoints
