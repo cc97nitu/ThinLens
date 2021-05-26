@@ -369,9 +369,9 @@ class SIS18_Cell_minimal(Model):
 
         # specify beam line elements
         bendingAngle = 0.2617993878
-        rb1 = Elements.RBen(length=2.617993878, angle=bendingAngle, e1=-0.5*bendingAngle, e2=-0.5*bendingAngle,
+        rb1 = Elements.RBen(length=2.617993878, angle=bendingAngle, e1=0, e2=0,
                             **self.generalProperties)
-        rb2 = Elements.RBen(length=2.617993878, angle=bendingAngle, e1=-0.5*bendingAngle, e2=-0.5*bendingAngle,
+        rb2 = Elements.RBen(length=2.617993878, angle=bendingAngle, e1=0, e2=0,
                             **self.generalProperties)
 
         d1 = Elements.Drift(0.645, **self.generalProperties)
@@ -443,13 +443,13 @@ class SIS18_Cell(Model):
 
         # define beam line elements
         bendingAngle = 0.2617993878
-        rb1a = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=-0.5*bendingAngle, e2=0,
+        rb1a = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
                              **self.generalProperties)
-        rb1b = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=-0.5*bendingAngle,
+        rb1b = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
                              **self.generalProperties)
-        rb2a = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=-0.5*bendingAngle, e2=0,
+        rb2a = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
                              **self.generalProperties)
-        rb2b = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=-0.5*bendingAngle,
+        rb2b = Elements.RBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
                              **self.generalProperties)
 
         # sextupoles
