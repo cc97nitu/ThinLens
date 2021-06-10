@@ -1,6 +1,7 @@
 import math
 import json
 import typing
+import collections
 
 import torch
 import torch.nn as nn
@@ -35,14 +36,21 @@ class Model(nn.Module):
 
         return
 
-    def forward(self, x: torch.tensor, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False):
+    def forward(self, x: torch.tensor, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False,
+                rotate: typing.Union[None, int] = None):
         # create lose bunch
         x = x.transpose(1, 0).unbind(0)
+
+        if rotate is None:
+            elements = self.elements
+        else:
+            elements = collections.deque(self.elements)
+            elements.rotate(rotate)
 
         if outputPerElement:
             outputs = list()
             for turn in range(nTurns):
-                for e in self.elements:
+                for e in elements:
                     x = e(x)
                     outputs.append(x)
 
@@ -54,7 +62,7 @@ class Model(nn.Module):
         elif outputAtBPM:
             outputs = list()
             for turn in range(nTurns):
-                for e in self.elements:
+                for e in elements:
                     x = e(x)
 
                     if type(e) is Elements.Monitor:
@@ -67,7 +75,7 @@ class Model(nn.Module):
             return torch.stack(outputs).permute(1, 2, 0)  # particle, dim, element
         else:
             for turn in range(nTurns):
-                for e in self.elements:
+                for e in elements:
                     x = e(x)
 
             return torch.stack(x, dim=1)
@@ -362,7 +370,8 @@ class RBendLine(Model):
 
 
 class SIS18_Cell_minimal(Model):
-    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351, k1f_support: typing.Union[None, float] = 0, slices: int = 1,
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351,
+                 k1f_support: typing.Union[None, float] = 0, slices: int = 1,
                  order: int = 2, quadSliceMultiplicity: int = 4):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.4
         super().__init__(slices=slices, order=order)
@@ -403,13 +412,15 @@ class SIS18_Cell_minimal(Model):
 
 
 class SIS18_Cell_minimal_noDipoles(Model):
-    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351, k1f_support: typing.Union[None, float] = 0, slices: int = 1,
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351,
+                 k1f_support: typing.Union[None, float] = 0, slices: int = 1,
                  order: int = 2, quadSliceMultiplicity: int = 4):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(slices=slices, order=order)
 
         # specify beam line elements
-        d3 = Elements.Drift(6.839011704000001, **self.generalProperties)
+        d3 = Elements.Drift(2 * 2.617993878 + 0.645 + 0.9700000000000002 + 6.839011704000001,
+                            **self.generalProperties)  # replace beginning of SIS18_Cell_minimal by a long drift
         d4 = Elements.Drift(0.5999999999999979, **self.generalProperties)
         d5 = Elements.Drift(0.7097999999999978, **self.generalProperties)
         d6 = Elements.Drift(0.49979999100000283, **self.generalProperties)
@@ -436,7 +447,9 @@ class SIS18_Cell_minimal_noDipoles(Model):
 
 
 class SIS18_Cell(Model):
-    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351, k1f_support: typing.Union[None, float] = 0, k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4):
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351,
+                 k1f_support: typing.Union[None, float] = 0, k2f: float = 0, k2d: float = 0, slices: int = 1,
+                 order: int = 2, quadSliceMultiplicity: int = 4):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(slices=slices, order=order)
         self.quadSliceMultiplicity = quadSliceMultiplicity
@@ -497,8 +510,9 @@ class SIS18_Cell(Model):
         return
 
 
-class SIS18_Lattice_minimal(Model):
-    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351, k1f_support: typing.Union[None, float] = 0, slices: int = 1,
+class SIS18_Lattice_minimal_noDipoles(Model):
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351,
+                 k1f_support: typing.Union[None, float] = 0, slices: int = 1,
                  order: int = 2, quadSliceMultiplicity: int = 4, cellsIdentical: bool = False):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.4
         super().__init__(slices=slices, order=order)
@@ -508,7 +522,8 @@ class SIS18_Lattice_minimal(Model):
         beamline = list()
 
         if cellsIdentical:
-            cell = SIS18_Cell_minimal(k1f=k1f, k1d=k1d, k1f_support=k1f_support, slices=slices, order=order, quadSliceMultiplicity=quadSliceMultiplicity)
+            cell = SIS18_Cell_minimal_noDipoles(k1f=k1f, k1d=k1d, k1f_support=k1f_support, slices=slices, order=order,
+                                                quadSliceMultiplicity=quadSliceMultiplicity)
 
             for i in range(12):
                 self.cells.append(cell)
@@ -516,10 +531,41 @@ class SIS18_Lattice_minimal(Model):
         else:
             for i in range(12):
                 # create cell
-                cell = SIS18_Cell_minimal(k1f=k1f, k1d=k1d, k1f_support=k1f_support, slices=slices, order=order, quadSliceMultiplicity=quadSliceMultiplicity)
+                cell = SIS18_Cell_minimal_noDipoles(k1f=k1f, k1d=k1d, k1f_support=k1f_support, slices=slices,
+                                                    order=order, quadSliceMultiplicity=quadSliceMultiplicity)
                 self.cells.append(cell)
                 beamline += cell.elements
 
+        self.elements = nn.ModuleList(beamline)
+        self.logElementPositions()
+        return
+
+
+class SIS18_Lattice_minimal(Model):
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351,
+                 k1f_support: typing.Union[None, float] = 0, slices: int = 1,
+                 order: int = 2, quadSliceMultiplicity: int = 4, cellsIdentical: bool = False):
+        # default values for k1f, k1d correspond to a tune of 4.2, 3.4
+        super().__init__(slices=slices, order=order)
+
+        # SIS18 consists of 12 cells
+        self.cells = list()
+        beamline = list()
+
+        if cellsIdentical:
+            cell = SIS18_Cell_minimal(k1f=k1f, k1d=k1d, k1f_support=k1f_support, slices=slices, order=order,
+                                      quadSliceMultiplicity=quadSliceMultiplicity)
+
+            for i in range(12):
+                self.cells.append(cell)
+                beamline += cell.elements
+        else:
+            for i in range(12):
+                # create cell
+                cell = SIS18_Cell_minimal(k1f=k1f, k1d=k1d, k1f_support=k1f_support, slices=slices, order=order,
+                                          quadSliceMultiplicity=quadSliceMultiplicity)
+                self.cells.append(cell)
+                beamline += cell.elements
 
         self.elements = nn.ModuleList(beamline)
         self.logElementPositions()
@@ -527,7 +573,9 @@ class SIS18_Lattice_minimal(Model):
 
 
 class SIS18_Lattice(Model):
-    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351, k1f_support: float = 0, k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4, cellsIdentical: bool = False):
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351, k1f_support: float = 0,
+                 k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4,
+                 cellsIdentical: bool = False):
         # default values for k1f, k1d correspond to a tune of 4.2, 3.3
         super().__init__(slices=slices, order=order)
         self.quadSliceMultiplicity = quadSliceMultiplicity
@@ -537,7 +585,8 @@ class SIS18_Lattice(Model):
         beamline = list()
 
         if cellsIdentical:
-            cell = SIS18_Cell(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices, order=order, quadSliceMultiplicity=quadSliceMultiplicity)
+            cell = SIS18_Cell(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices, order=order,
+                              quadSliceMultiplicity=quadSliceMultiplicity)
 
             for i in range(12):
                 self.cells.append(cell)
@@ -589,10 +638,9 @@ if __name__ == "__main__":
     with open("/dev/shm/modelDump.json", "r") as f:
         mod1.loadJSON(f)
 
-
     # check model creation
     cell = SIS18_Cell(k1f_support=0)
-    print(cell.getTunes(),)
+    print(cell.getTunes(), )
     c = len(cell.elements)
 
     lattice = SIS18_Lattice(cellsIdentical=True)
