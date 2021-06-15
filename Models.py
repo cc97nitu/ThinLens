@@ -136,7 +136,7 @@ class Model(nn.Module):
         lattice = templates + "\n" + sequence
         return lattice
 
-    def thinMultipoleMadX(self):
+    def thinMultipoleMadX(self, nameVariables: bool = True):
         """Export as Mad-X sequence consisting of thin-multipole and dipole edge elements."""
         # create single string containing whole sequence
         templates = ""
@@ -163,7 +163,11 @@ class Model(nn.Module):
                     sequence += "dipedge{}, at={};\n".format(kickIdentifier, currentPos)
                 else:
                     # add template
-                    templates += "kick{}: MULTIPOLE, ".format(kickIdentifier) + m.thinMultipoleElement() + ";\n"
+                    if type(m) is Maps.MultipoleKick:
+                        templates += "kick{}: MULTIPOLE, ".format(kickIdentifier) + m.thinMultipoleElement(nameVariables=nameVariables) + ";\n"
+                    else:
+                        templates += "kick{}: MULTIPOLE, ".format(kickIdentifier) + m.thinMultipoleElement() + ";\n"
+
                     sequence += "kick{}, at={};\n".format(kickIdentifier, currentPos)
 
                 kickIdentifier += 1

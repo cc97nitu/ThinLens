@@ -155,8 +155,14 @@ class MultipoleKick(Map):
 
         return rMatrix
 
-    def thinMultipoleElement(self):
+    def thinMultipoleElement(self, nameVariables: bool = False):
+        """
+        Represent this map as Mad-X thin-multipole element.
+        :param nameVariables: Replace numerical values by names of Mad-X variables.
+        :return: Mad-X element definition.
+        """
         integratedMultipoleStrengths = dict()
+
         integratedMultipoleStrengths["k1nl"] = self.kickLength.item() * self.k1n.item()
         integratedMultipoleStrengths["k2nl"] = self.kickLength.item() * self.k2n.item()
         integratedMultipoleStrengths["k3nl"] = self.kickLength.item() * self.k3n.item()
@@ -165,7 +171,22 @@ class MultipoleKick(Map):
         integratedMultipoleStrengths["k2sl"] = self.kickLength.item() * self.k2s.item()
         integratedMultipoleStrengths["k3sl"] = self.kickLength.item() * self.k3s.item()
 
-        return "KNL={{0.0, {k1nl}, {k2nl}, {k3nl}}}, KSL={{0.0, {k1sl}, {k2sl}, {k3sl}}}".format(
+        if nameVariables:
+            if self.k1n.item() > 0:
+                integratedMultipoleStrengths["k1nl"] = "k1fl"
+            elif self.k1n.item() < 0:
+                integratedMultipoleStrengths["k1nl"] = "k1dl"
+            else:
+                integratedMultipoleStrengths["k1nl"] = 0.0
+
+            if self.k2n.item() > 0:
+                integratedMultipoleStrengths["k2nl"] = "k2fl"
+            elif self.k2n.item() < 0:
+                integratedMultipoleStrengths["k2nl"] = "k2dl"
+            else:
+                integratedMultipoleStrengths["k2nl"] = 0.0
+
+        return "KNL:={{0.0, {k1nl}, {k2nl}, {k3nl}}}, KSL:={{0.0, {k1sl}, {k2sl}, {k3sl}}}".format(
             **integratedMultipoleStrengths)
 
 
