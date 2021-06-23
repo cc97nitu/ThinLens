@@ -9,6 +9,8 @@ import torch.nn as nn
 import ThinLens.Elements as Elements
 import ThinLens.Maps as Maps
 
+import sixtracklib as stl
+
 
 class TwissFailed(ValueError):
     """Indicate a problem with twiss-calculation."""
@@ -136,7 +138,7 @@ class Model(nn.Module):
         lattice = templates + "\n" + sequence
         return lattice
 
-    def thinMultipoleMadX(self, nameVariables: bool = True):
+    def thinMultipoleMadX(self, nameVariables: bool = False):
         """Export as Mad-X sequence consisting of thin-multipole and dipole edge elements."""
         # create single string containing whole sequence
         templates = ""
@@ -189,6 +191,68 @@ class Model(nn.Module):
         # lattice contains templates and sequence
         lattice = templates + "\n" + sequence
         return lattice
+
+    def sixTrackLib(self, numStores: int = 1, installBPMs: bool = True, finalPhaseSpace: bool = False):
+        """Export model to SixTrackLib."""
+        myElem = stl.Elements()
+
+        if not installBPMs and not finalPhaseSpace:
+            raise ValueError("no output specified")
+
+        # build map-wise
+        class MonitorDummy(object):
+            def __init__(self):
+                super().__init__()
+                self.length = 0.0
+                return
+
+        maps = list()
+        for element in self.elements:
+            for m in element.maps:
+                maps.append(m)
+
+            if installBPMs and type(element) is Elements.Monitor:
+                maps.append(MonitorDummy())
+
+        # remove consecutive drifts
+        for i in range(1, len(maps)):
+            try:
+                curMap, prevMap = maps[i], maps[i - 1]
+            except IndexError:
+                break
+
+            if type(curMap) is Maps.DriftMap and type(prevMap) is Maps.DriftMap:
+                maps[i] = Maps.DriftMap(curMap.length + prevMap.length)
+                del maps[i - 1]
+
+        # add maps to SixTrackLib
+        for m in maps:
+            if type(m) is Maps.DriftMap:
+                myElem.Drift(length=m.length)
+            elif type(m) is Maps.DipoleKick:
+                k0L = m.weight.item() * m.dipoleLength
+
+                myElem.Multipole(length=m.dipoleLength, hxl=m.angle, knl=[k0L, ])
+            elif type(m) is Maps.EdgeKick:
+                myElem.DipoleEdge(h=m.curvature, e1=m.edgeAngle)
+            elif type(m) is Maps.MultipoleKick:
+                k1nl = m.kickLength.item() * m.k1n.item()
+                k2nl = m.kickLength.item() * m.k2n.item()
+                k1sl = m.kickLength.item() * m.k1s.item()
+                k2sl = m.kickLength.item() * m.k2s.item()
+
+                knl = [0.0, k1nl, k2nl]
+                ksl = [0.0, k1sl, k2sl]
+                myElem.Multipole(knl=knl, ksl=ksl)
+            elif type(m) is MonitorDummy:
+                myElem.BeamMonitor(num_stores=numStores)
+            else:
+                raise NotImplementedError()
+
+        if finalPhaseSpace:
+            myElem.BeamMonitor(num_stores=numStores)
+
+        return myElem
 
     def getTunes(self) -> list:
         """Calculate tune from one-turn map."""

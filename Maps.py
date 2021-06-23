@@ -56,6 +56,7 @@ class DipoleKick(Map):
         super().__init__()
         self.dipoleLength = length  # used to calculate k0L for Mad-X
         self.lengthTensor = torch.tensor(self.dipoleLength, dtype=torch.double)  # input to phase-space transformation
+        self.angle = angle
 
         # initialize weight
         curvature = angle / length
