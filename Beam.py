@@ -3,6 +3,8 @@ import math
 import torch
 import torch.distributions
 
+import sixtracklib as stl
+
 
 class Beam(object):
     def __init__(self, mass: float, energy: float, exn: float, eyn: float, sigt: float, sige: float, particles: int,
@@ -16,6 +18,9 @@ class Beam(object):
         self.charge = charge  # e
         self.exn = exn
         self.eyn = eyn
+        self.sigt = sigt
+        self.sige = sige
+        self.centroid = centroid
 
         self.gamma = self.energy / self.mass
         self.momentum = torch.sqrt(torch.tensor(self.energy) ** 2 - torch.tensor(self.mass) ** 2).item()  # GeV/c
@@ -64,7 +69,7 @@ class Beam(object):
         # check if nan occurs in bunch <- can be if sige is too large and hence energy is smaller than rest energy
         assert not self.bunch.isnan().any()
 
-        self.bunch.double()
+        self.bunch = self.bunch.double()
 
         return
 
@@ -89,6 +94,26 @@ class Beam(object):
     def madX(self):
         """Export as arguments for madx.beam command."""
         return {"mass": self.mass, "charge": self.charge, "exn": self.exn, "eyn": self.eyn, "gamma": self.gamma}
+
+    def toDict(self):
+        """Beam properties as dictionary."""
+        return {"mass": self.mass, "charge": self.charge, "exn": self.exn, "eyn": self.eyn, "gamma": self.gamma,
+                "sigt": self.sigt, "sige": self.sige, "energy": self.energy, "centroid": self.centroid}
+
+    def sixTrackLibParticles(self):
+        """Return bunch as stl.Particles."""
+        particles = stl.Particles.from_ref(len(self.bunch), self.momentum, )
+
+        # load phase space coordinates
+        particles.x = self.bunch[:, 0]
+        particles.px = self.bunch[:, 1]
+        particles.y = self.bunch[:, 2]
+        particles.py = self.bunch[:, 3]
+
+        # apparently this updates other coordinates related to longitudinal momentum too
+        particles.delta = self.bunch[:, 6]
+
+        return particles
 
 
 if __name__ == "__main__":
