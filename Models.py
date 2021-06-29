@@ -22,6 +22,14 @@ class TwissFailed(ValueError):
 
 
 class Model(nn.Module):
+    class MonitorDummy(object):
+        """Used to represent monitors in case of concatenated drifts."""
+
+        def __init__(self):
+            super().__init__()
+            self.length = 0.0
+            return
+
     def __init__(self, slices: int = 1, order: int = 2):
         super().__init__()
         self.generalProperties: dict = {"slices": slices, "order": order}
@@ -36,10 +44,13 @@ class Model(nn.Module):
         self.elements = None
         self.totalLen: float = 0
 
+        # placeholder for merged lattice
+        self.mergedMaps = None
+
         return
 
     def forward(self, x: torch.tensor, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False,
-                rotate: typing.Union[None, int] = None):
+                rotate: typing.Union[None, int] = None, mergeDrifts: bool = False):
         # create lose bunch
         x = x.transpose(1, 0).unbind(0)
 
@@ -48,6 +59,13 @@ class Model(nn.Module):
         else:
             elements = collections.deque(self.elements)
             elements.rotate(rotate)
+
+        if mergeDrifts:
+            if outputPerElement:
+                raise ValueError("cannot produce output per element if drifts are concatenated")
+
+            if not self.mergedMaps:
+                self.mergedMaps = self.concatenateDrifts()
 
         if outputPerElement:
             outputs = list()
@@ -64,11 +82,18 @@ class Model(nn.Module):
         elif outputAtBPM:
             outputs = list()
             for turn in range(nTurns):
-                for e in elements:
-                    x = e(x)
+                if mergeDrifts:
+                    for m in self.mergedMaps:
+                        if type(m) is Model.MonitorDummy:
+                            outputs.append(x)
+                        else:
+                            x = m(x)
+                else:
+                    for e in elements:
+                        x = e(x)
 
-                    if type(e) is Elements.Monitor:
-                        outputs.append(x)
+                        if type(e) is Elements.Monitor:
+                            outputs.append(x)
 
             # merge coordinates into single bunch
             for i in range(len(outputs)):
@@ -76,9 +101,16 @@ class Model(nn.Module):
 
             return torch.stack(outputs).permute(1, 2, 0)  # particle, dim, element
         else:
-            for turn in range(nTurns):
-                for e in elements:
-                    x = e(x)
+            if mergeDrifts:
+                for turn in range(nTurns):
+                    for m in self.mergedMaps:
+                        if type(m) is Model.MonitorDummy:
+                            continue
+                        x = m(x)
+            else:
+                for turn in range(nTurns):
+                    for e in elements:
+                        x = e(x)
 
             return torch.stack(x, dim=1)
 
@@ -192,27 +224,17 @@ class Model(nn.Module):
         lattice = templates + "\n" + sequence
         return lattice
 
-    def sixTrackLib(self, numStores: int = 1, installBPMs: bool = True, finalPhaseSpace: bool = False):
-        """Export model to SixTrackLib."""
-        myElem = stl.Elements()
-
-        if not installBPMs and not finalPhaseSpace:
-            raise ValueError("no output specified")
-
-        # build map-wise
-        class MonitorDummy(object):
-            def __init__(self):
-                super().__init__()
-                self.length = 0.0
-                return
-
+    def concatenateDrifts(self):
+        """Create a map-based model with consecutive drifts merged."""
         maps = list()
         for element in self.elements:
             for m in element.maps:
                 maps.append(m)
 
-            if installBPMs and type(element) is Elements.Monitor:
-                maps.append(MonitorDummy())
+            if type(element) is Elements.Monitor:
+                maps.append(Model.MonitorDummy())
+
+        print("maps before: ", len(maps))
 
         # remove consecutive drifts
         for i in range(1, len(maps)):
@@ -224,6 +246,20 @@ class Model(nn.Module):
             if type(curMap) is Maps.DriftMap and type(prevMap) is Maps.DriftMap:
                 maps[i] = Maps.DriftMap(curMap.length + prevMap.length)
                 del maps[i - 1]
+
+        print("maps after: ", len(maps))
+
+        return maps
+
+    def sixTrackLib(self, numStores: int = 1, installBPMs: bool = True, finalPhaseSpace: bool = False):
+        """Export model to SixTrackLib."""
+        myElem = stl.Elements()
+
+        if not installBPMs and not finalPhaseSpace:
+            raise ValueError("no output specified")
+
+        # build map-wise
+        maps = self.concatenateDrifts()
 
         # add maps to SixTrackLib
         for m in maps:
@@ -244,8 +280,11 @@ class Model(nn.Module):
                 knl = [0.0, k1nl, k2nl]
                 ksl = [0.0, k1sl, k2sl]
                 myElem.Multipole(knl=knl, ksl=ksl)
-            elif type(m) is MonitorDummy:
-                myElem.BeamMonitor(num_stores=numStores)
+            elif type(m) is Model.MonitorDummy:
+                if installBPMs:
+                    myElem.BeamMonitor(num_stores=numStores)
+                else:
+                    continue
             else:
                 raise NotImplementedError()
 
@@ -600,13 +639,13 @@ class SIS18_Cell_noDipoles(Model):
 
         # define beam line elements
         rb1a = Elements.Drift(length=2.617993878 / 2,
-                             **self.generalProperties)
+                              **self.generalProperties)
         rb1b = Elements.Drift(length=2.617993878 / 2,
-                             **self.generalProperties)
+                              **self.generalProperties)
         rb2a = Elements.Drift(length=2.617993878 / 2,
-                             **self.generalProperties)
+                              **self.generalProperties)
         rb2b = Elements.Drift(length=2.617993878 / 2,
-                             **self.generalProperties)
+                              **self.generalProperties)
 
         # sextupoles
         ks1c = Elements.Sextupole(length=0.32, k2=k2f, **self.generalProperties)
@@ -793,8 +832,9 @@ class SIS18_Lattice_noDipoles(Model):
         beamline = list()
 
         if cellsIdentical:
-            cell = SIS18_Cell_noDipoles(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices, order=order,
-                              quadSliceMultiplicity=quadSliceMultiplicity)
+            cell = SIS18_Cell_noDipoles(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices,
+                                        order=order,
+                                        quadSliceMultiplicity=quadSliceMultiplicity)
 
             for i in range(12):
                 self.cells.append(cell)
@@ -802,7 +842,7 @@ class SIS18_Lattice_noDipoles(Model):
         else:
             for i in range(12):
                 cell = SIS18_Cell_noDipoles(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices,
-                                  order=order, quadSliceMultiplicity=quadSliceMultiplicity)
+                                            order=order, quadSliceMultiplicity=quadSliceMultiplicity)
 
                 self.cells.append(cell)
                 beamline += cell.elements
@@ -825,8 +865,9 @@ class SIS18_Lattice_oneBPM(Model):
         beamline = list()
 
         if cellsIdentical:
-            cell = SIS18_Cell_oneBPM(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices, order=order,
-                              quadSliceMultiplicity=quadSliceMultiplicity)
+            cell = SIS18_Cell_oneBPM(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices,
+                                     order=order,
+                                     quadSliceMultiplicity=quadSliceMultiplicity)
 
             for i in range(12):
                 self.cells.append(cell)
@@ -834,7 +875,7 @@ class SIS18_Lattice_oneBPM(Model):
         else:
             for i in range(12):
                 cell = SIS18_Cell_oneBPM(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices,
-                                  order=order, quadSliceMultiplicity=quadSliceMultiplicity)
+                                         order=order, quadSliceMultiplicity=quadSliceMultiplicity)
 
                 self.cells.append(cell)
                 beamline += cell.elements
@@ -873,31 +914,20 @@ class SIS18_Lattice(Model):
 
         self.elements = nn.ModuleList(beamline)
         self.logElementPositions()
+
+        # prepare merged drifts
+        self.mergedMaps = self.concatenateDrifts()
         return
 
 
 if __name__ == "__main__":
+    import timeit
     import matplotlib.pyplot as plt
 
     torch.set_printoptions(precision=4, sci_mode=True)
 
     # set up models
     mod1 = SIS18_Lattice(slices=4, quadSliceMultiplicity=4)
-
-    # show initial twiss
-    print("initial twiss")
-    twissX0, twissY0 = mod1.getInitialTwiss()
-    print(twissX0, twissY0)
-
-    # get tunes
-    print("tunes: {}".format(mod1.getTunes()))
-
-    # show twiss
-    twiss = mod1.getTwiss()
-
-    plt.plot(twiss["s"], twiss["betx"])
-    plt.show()
-    plt.close()
 
     # dump to string
     modelDescription = mod1.toJSON()
@@ -910,9 +940,8 @@ if __name__ == "__main__":
     with open("/dev/shm/modelDump.json", "r") as f:
         mod1.loadJSON(f)
 
-    # check model creation
-    cell = SIS18_Cell(k1f_support=0)
-    print(cell.getTunes(), )
-    c = len(cell.elements)
-
-    lattice = SIS18_Lattice(cellsIdentical=True)
+    # check map concatenation
+    x = lambda: mod1.concatenateDrifts()
+    x()
+    duration = timeit.timeit(x, number=100)
+    print(duration)
