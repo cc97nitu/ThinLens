@@ -3,6 +3,8 @@ import json
 import typing
 import collections
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 
@@ -234,8 +236,6 @@ class Model(nn.Module):
             if type(element) is Elements.Monitor:
                 maps.append(Model.MonitorDummy())
 
-        print("maps before: ", len(maps))
-
         # remove consecutive drifts
         for i in range(1, len(maps)):
             try:
@@ -246,8 +246,6 @@ class Model(nn.Module):
             if type(curMap) is Maps.DriftMap and type(prevMap) is Maps.DriftMap:
                 maps[i] = Maps.DriftMap(curMap.length + prevMap.length)
                 del maps[i - 1]
-
-        print("maps after: ", len(maps))
 
         return maps
 
@@ -292,6 +290,38 @@ class Model(nn.Module):
             myElem.BeamMonitor(num_stores=numStores)
 
         return myElem
+
+    def trackWithSTL(self, beam, nTurns, outputAtBPM=True, finalPhaseSpace=False):
+        # track with BPMs
+        elements = self.sixTrackLib(nTurns, installBPMs=outputAtBPM, finalPhaseSpace=finalPhaseSpace)
+        particles = beam.sixTrackLibParticles()
+
+        jobBPM = stl.TrackJob(elements, particles, device=None)
+
+        jobBPM.track_until(nTurns)
+        jobBPM.collect()
+
+        # bring tracking results into same shape as model output
+        spatial = list()
+        for bpm in jobBPM.output.particles:
+            x = bpm.x.reshape(-1, len(beam.bunch))
+            px = bpm.px.reshape(-1, len(beam.bunch))
+            y = bpm.y.reshape(-1, len(beam.bunch))
+            py = bpm.py.reshape(-1, len(beam.bunch))
+            s = bpm.s.reshape(-1, len(beam.bunch))
+            psigma = bpm.psigma.reshape(-1, len(beam.bunch))
+            delta = bpm.delta.reshape(-1, len(beam.bunch))
+            invDelta = 1 / (delta + 1)
+            velocityRatio = bpm.rvv.reshape(-1, len(beam.bunch))
+
+            spatialCoordinates = np.stack([x, px, y, py, s, psigma, delta, invDelta, velocityRatio])
+            spatial.append(spatialCoordinates)  # (dim, turn, particle)
+
+        spatial = np.stack(spatial)  # bpm, dim, turn, particle
+        output = [spatial[:, :, i, :] for i in range(spatial.shape[2])]
+        output = np.concatenate(output)  # bpm, dim, particle
+
+        return torch.as_tensor(np.transpose(output, (2, 1, 0)), )  # particle, dim, bpm
 
     def getTunes(self) -> list:
         """Calculate tune from one-turn map."""
