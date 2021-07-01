@@ -319,7 +319,7 @@ class Model(nn.Module):
             psigma = bpm.psigma.reshape(-1, len(beam.bunch))
             delta = bpm.delta.reshape(-1, len(beam.bunch))
             invDelta = 1 / (delta + 1)
-            velocityRatio = bpm.rvv.reshape(-1, len(beam.bunch))
+            velocityRatio = 1 / bpm.rvv.reshape(-1, len(beam.bunch))
 
             spatialCoordinates = np.stack([x, px, y, py, sigma, psigma, delta, invDelta, velocityRatio])
             spatial.append(spatialCoordinates)  # (dim, turn, particle)

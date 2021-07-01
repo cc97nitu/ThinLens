@@ -14,7 +14,7 @@ class Beam(object):
         """
         # calculate properties of reference particle
         self.energy = energy  # GeV
-        self.mass = mass  # GeV
+        self.mass = mass  # GeV / c**2
         self.charge = charge  # e
         self.exn = exn
         self.eyn = eyn
@@ -23,7 +23,8 @@ class Beam(object):
         self.centroid = centroid
 
         self.gamma = self.energy / self.mass
-        self.momentum = torch.sqrt(torch.tensor(self.energy) ** 2 - torch.tensor(self.mass) ** 2).item()  # GeV/c
+        # self.momentum = torch.sqrt(torch.tensor(self.energy) ** 2 - torch.tensor(self.mass) ** 2).item()  # GeV/c
+        self.momentum = math.sqrt(self.energy ** 2 - self.mass ** 2)  # GeV/c
 
         self.beta = self.momentum / (self.gamma * self.mass)
 
@@ -43,7 +44,7 @@ class Beam(object):
         scaleTril = torch.diag(std ** 2)
         dist = torch.distributions.multivariate_normal.MultivariateNormal(loc, scale_tril=scaleTril)
 
-        preliminaryBunch = dist.sample((particles,))  # x, xp, y, yp, sigma, totalEnergy
+        preliminaryBunch = dist.sample((particles,)).double()  # x, xp, y, yp, sigma, totalEnergy
 
         # calculate missing properties for individual particles
         pSigma = (preliminaryBunch[:, 5] - self.energy) / (self.beta * self.momentum)
@@ -68,8 +69,6 @@ class Beam(object):
 
         # check if nan occurs in bunch <- can be if sige is too large and hence energy is smaller than rest energy
         assert not self.bunch.isnan().any()
-
-        self.bunch = self.bunch.double()
 
         return
 
@@ -104,12 +103,16 @@ class Beam(object):
         """Return bunch as stl.Particles."""
         particles = stl.Particles.from_ref(len(self.bunch), self.momentum, )
 
+        # this sets reference momentum, mass and velocity to correct values
+        particles.set_reference(p0c=1e9*self.momentum, mass0=1e9*self.mass)
+
         # load phase space coordinates
         particles.x = self.bunch[:, 0]
         particles.px = self.bunch[:, 1]
         particles.y = self.bunch[:, 2]
         particles.py = self.bunch[:, 3]
         # particles.sigma = self.bunch[:, 4]
+
 
         # apparently this updates other coordinates related to longitudinal momentum too
         particles.delta = self.bunch[:, 6]
@@ -122,4 +125,5 @@ if __name__ == "__main__":
 
     beam = Beam(mass=18.798, energy=19.0, exn=1.258e-6, eyn=2.005e-6, sigt=0.01, sige=0.005, particles=int(1e1))
 
-    print(beam.bunch)
+    print(beam.gamma)
+
