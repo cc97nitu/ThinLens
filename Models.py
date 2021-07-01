@@ -64,10 +64,14 @@ class Model(nn.Module):
 
         if mergeDrifts:
             if outputPerElement:
-                raise ValueError("cannot produce output per element if drifts are concatenated")
+                raise ValueError("cannot produce output per element if drifts are merged")
 
             if not self.mergedMaps:
                 self.mergedMaps = self.concatenateDrifts()
+                mergedMaps = self.mergedMaps
+
+            if rotate is not None:
+                mergedMaps = self.concatenateDrifts(elements)
 
         if outputPerElement:
             outputs = list()
@@ -85,7 +89,7 @@ class Model(nn.Module):
             outputs = list()
             for turn in range(nTurns):
                 if mergeDrifts:
-                    for m in self.mergedMaps:
+                    for m in mergedMaps:
                         if type(m) is Model.MonitorDummy:
                             outputs.append(x)
                         else:
@@ -105,7 +109,7 @@ class Model(nn.Module):
         else:
             if mergeDrifts:
                 for turn in range(nTurns):
-                    for m in self.mergedMaps:
+                    for m in mergedMaps:
                         if type(m) is Model.MonitorDummy:
                             continue
                         x = m(x)
@@ -226,10 +230,13 @@ class Model(nn.Module):
         lattice = templates + "\n" + sequence
         return lattice
 
-    def concatenateDrifts(self):
+    def concatenateDrifts(self, elements: typing.Union[None, list] = None):
         """Create a map-based model with consecutive drifts merged."""
+        if elements is None:
+            elements = self.elements
+
         maps = list()
-        for element in self.elements:
+        for element in elements:
             for m in element.maps:
                 maps.append(m)
 
@@ -308,13 +315,13 @@ class Model(nn.Module):
             px = bpm.px.reshape(-1, len(beam.bunch))
             y = bpm.y.reshape(-1, len(beam.bunch))
             py = bpm.py.reshape(-1, len(beam.bunch))
-            s = bpm.s.reshape(-1, len(beam.bunch))
+            sigma = bpm.sigma.reshape(-1, len(beam.bunch))
             psigma = bpm.psigma.reshape(-1, len(beam.bunch))
             delta = bpm.delta.reshape(-1, len(beam.bunch))
             invDelta = 1 / (delta + 1)
             velocityRatio = bpm.rvv.reshape(-1, len(beam.bunch))
 
-            spatialCoordinates = np.stack([x, px, y, py, s, psigma, delta, invDelta, velocityRatio])
+            spatialCoordinates = np.stack([x, px, y, py, sigma, psigma, delta, invDelta, velocityRatio])
             spatial.append(spatialCoordinates)  # (dim, turn, particle)
 
         spatial = np.stack(spatial)  # bpm, dim, turn, particle

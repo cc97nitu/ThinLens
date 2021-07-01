@@ -109,7 +109,7 @@ class Beam(object):
         particles.px = self.bunch[:, 1]
         particles.y = self.bunch[:, 2]
         particles.py = self.bunch[:, 3]
-        particles.s = self.bunch[:, 4]
+        # particles.sigma = self.bunch[:, 4]
 
         # apparently this updates other coordinates related to longitudinal momentum too
         particles.delta = self.bunch[:, 6]
