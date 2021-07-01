@@ -11,7 +11,7 @@ class Drift(torch.autograd.Function):
         # update phase space coordinates
         newX = x + length * xp
         newY = y + length * yp
-        newSigma = sigma + (1 - vR) * length
+        newSigma = sigma + (1 - vR * (1 + 1/2 * (xp**2 + yp**2))) * length
 
         return newX, xp, newY, yp, newSigma, pSigma, delta, invDelta, vR
 
@@ -21,12 +21,12 @@ class Drift(torch.autograd.Function):
         length, xp, yp, vR = ctx.saved_tensors
 
         # calculate gradients
-        newGradXp = gradXp + length * gradX
-        newGradYp = gradYp + length * gradY
-        newGradVR = gradVR - length * gradSigma
+        newGradXp = gradXp + length * gradX - vR * length * xp * gradSigma
+        newGradYp = gradYp + length * gradY - vR * length * yp * gradSigma
+        newGradVR = gradVR - length * (1 + 1/2 * (xp**2 + yp**2)) * gradSigma
 
         if ctx.needs_input_grad[9]:
-            gradLength = xp * gradX + yp * gradY + (1 - vR) * gradSigma
+            gradLength = xp * gradX + yp * gradY + (1 - vR * (1 + 1/2 * (xp**2 + yp**2))) * gradSigma
         else:
             gradLength = None
 
