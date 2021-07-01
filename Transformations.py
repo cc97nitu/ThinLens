@@ -6,31 +6,33 @@ class Drift(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, xp, y, yp, sigma, pSigma, delta, invDelta, vR, length):
         # save inputs for backward pass
-        ctx.save_for_backward(length, xp, yp, vR)
+        ctx.save_for_backward(length, xp, yp, invDelta, vR)
 
         # update phase space coordinates
-        newX = x + length * xp
-        newY = y + length * yp
-        newSigma = sigma + (1 - vR * (1 + 1/2 * (xp**2 + yp**2))) * length
+        newX = x + length * xp * invDelta
+        newY = y + length * yp * invDelta
+        newSigma = sigma + (1 - vR * (1 + 1/2 * invDelta**2 * (xp**2 + yp**2))) * length
 
         return newX, xp, newY, yp, newSigma, pSigma, delta, invDelta, vR
 
     @staticmethod
     def backward(ctx, gradX, gradXp, gradY, gradYp, gradSigma, gradPSigma, gradDelta, gradInvDelta, gradVR):
         # old phase space
-        length, xp, yp, vR = ctx.saved_tensors
+        length, xp, yp, invDelta, vR = ctx.saved_tensors
 
         # calculate gradients
-        newGradXp = gradXp + length * gradX - vR * length * xp * gradSigma
-        newGradYp = gradYp + length * gradY - vR * length * yp * gradSigma
-        newGradVR = gradVR - length * (1 + 1/2 * (xp**2 + yp**2)) * gradSigma
+        newGradXp = gradXp + length * invDelta * (gradX - vR * xp * invDelta * gradSigma)
+        newGradYp = gradYp + length * invDelta * (gradY - vR * yp * invDelta * gradSigma)
+        newGradInvDelta = gradInvDelta + length * xp * gradX + length * yp * gradY - length * vR * (invDelta * (xp ** 2 + yp ** 2)) * gradSigma
+
+        newGradVR = gradVR - length * (1 + 1/2 * invDelta**2 * (xp**2 + yp**2)) * gradSigma
 
         if ctx.needs_input_grad[9]:
-            gradLength = xp * gradX + yp * gradY + (1 - vR * (1 + 1/2 * (xp**2 + yp**2))) * gradSigma
+            gradLength = xp * invDelta * gradX + yp * invDelta * gradY + (1 - vR * (1 + 1/2 * invDelta**2 * (xp**2 + yp**2))) * gradSigma
         else:
             gradLength = None
 
-        return gradX, newGradXp, gradY, newGradYp, gradSigma, gradPSigma, gradDelta, gradInvDelta, newGradVR, gradLength
+        return gradX, newGradXp, gradY, newGradYp, gradSigma, gradPSigma, gradDelta, newGradInvDelta, newGradVR, gradLength
 
 
 class Quadrupole(torch.autograd.Function):
