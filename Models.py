@@ -67,10 +67,10 @@ class Model(nn.Module):
                 raise ValueError("cannot produce output per element if drifts are merged")
 
             if not self.mergedMaps:
-                self.mergedMaps = self.concatenateDrifts()
+                self.mergedMaps = self.mergeDrifts()
 
             if rotate is not None:
-                mergedMaps = self.concatenateDrifts(elements)
+                mergedMaps = self.mergeDrifts(elements)
             else:
                 mergedMaps = self.mergedMaps
 
@@ -231,7 +231,7 @@ class Model(nn.Module):
         lattice = templates + "\n" + sequence
         return lattice
 
-    def concatenateDrifts(self, elements: typing.Union[None, list] = None):
+    def mergeDrifts(self, elements: typing.Union[None, list] = None):
         """Create a map-based model with consecutive drifts merged."""
         if elements is None:
             elements = self.elements
@@ -245,15 +245,15 @@ class Model(nn.Module):
                 maps.append(Model.MonitorDummy())
 
         # remove consecutive drifts
-        for i in range(1, len(maps)):
+        for i in reversed(range(len(maps) - 1)):
             try:
-                curMap, prevMap = maps[i], maps[i - 1]
+                curMap, prevMap = maps[i], maps[i + 1]
             except IndexError:
                 break
 
             if type(curMap) is Maps.DriftMap and type(prevMap) is Maps.DriftMap:
                 maps[i] = Maps.DriftMap(curMap.length + prevMap.length)
-                del maps[i - 1]
+                del maps[i + 1]
 
         return maps
 
@@ -265,7 +265,7 @@ class Model(nn.Module):
             raise ValueError("no output specified")
 
         # build map-wise
-        maps = self.concatenateDrifts()
+        maps = self.mergeDrifts()
 
         # add maps to SixTrackLib
         for m in maps:
@@ -954,7 +954,7 @@ class SIS18_Lattice(Model):
         self.logElementPositions()
 
         # prepare merged drifts
-        self.mergedMaps = self.concatenateDrifts()
+        self.mergedMaps = self.mergeDrifts()
         return
 
 
@@ -979,7 +979,7 @@ if __name__ == "__main__":
         mod1.loadJSON(f)
 
     # check map concatenation
-    x = lambda: mod1.concatenateDrifts()
+    x = lambda: mod1.mergeDrifts()
     x()
     duration = timeit.timeit(x, number=100)
     print(duration)
