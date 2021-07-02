@@ -68,10 +68,11 @@ class Model(nn.Module):
 
             if not self.mergedMaps:
                 self.mergedMaps = self.concatenateDrifts()
-                mergedMaps = self.mergedMaps
 
             if rotate is not None:
                 mergedMaps = self.concatenateDrifts(elements)
+            else:
+                mergedMaps = self.mergedMaps
 
         if outputPerElement:
             outputs = list()
@@ -315,10 +316,10 @@ class Model(nn.Module):
             px = bpm.px.reshape(-1, len(beam.bunch))
             y = bpm.y.reshape(-1, len(beam.bunch))
             py = bpm.py.reshape(-1, len(beam.bunch))
-            sigma = bpm.sigma.reshape(-1, len(beam.bunch))
+            sigma = bpm.zeta.reshape(-1, len(beam.bunch))  # double check if zeta really is sigma
             psigma = bpm.psigma.reshape(-1, len(beam.bunch))
             delta = bpm.delta.reshape(-1, len(beam.bunch))
-            invDelta = 1 / (delta + 1)
+            invDelta = bpm.rpp.reshape(-1, len(beam.bunch))
             velocityRatio = 1 / bpm.rvv.reshape(-1, len(beam.bunch))
 
             spatialCoordinates = np.stack([x, px, y, py, sigma, psigma, delta, invDelta, velocityRatio])
