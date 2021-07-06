@@ -72,8 +72,8 @@ class ThinMultipole(torch.autograd.Function):
         ctx.save_for_backward(length, k1n, k2n, k1s, k2s, x, y, invDelta)
 
         # update momenta
-        newXp = xp - length * invDelta * (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
-        newYp = yp + length * invDelta * (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
+        newXp = xp - length * (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
+        newYp = yp + length * (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
 
         return x, newXp, y, newYp, sigma, pSigma, delta, invDelta, vR
 
@@ -83,29 +83,29 @@ class ThinMultipole(torch.autograd.Function):
         length, k1n, k2n, k1s, k2s, x, y, invDelta = ctx.saved_tensors
 
         # phase space gradients
-        newGradX = gradX + length * invDelta * (
+        newGradX = gradX + length * (
                 (k1s + k2s * x + k2n * y) * gradYp + -1 * (k1n + k2n * x - k2s * y) * gradXp)
-        newGradY = gradY + length * invDelta * ((k1s + k2n * x + k2s * y) * gradXp + (k1n - k2s * y + k2n * x) * gradYp)
+        newGradY = gradY + length * ((k1s + k2n * x + k2s * y) * gradXp + (k1n - k2s * y + k2n * x) * gradYp)
 
         focX = (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
         focY = (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
-        newGradInvDelta = gradInvDelta + length * (-1 * focX * gradXp + focY * gradYp)
+        # newGradInvDelta = gradInvDelta + length * (-1 * focX * gradXp + focY * gradYp)
 
         # weight gradients
         gradLength = gradK1n = gradK2n = gradK1s = gradK2s = None
 
         if ctx.needs_input_grad[9]:
-            gradLength = invDelta * (-1 * focX * gradXp + focY * gradYp)
+            gradLength = (-1 * focX * gradXp + focY * gradYp)
         if ctx.needs_input_grad[10]:
-            gradK1n = length * invDelta * (-1 * (x * gradXp) + y * gradYp)
+            gradK1n = length * (-1 * (x * gradXp) + y * gradYp)
         if ctx.needs_input_grad[11]:
-            gradK2n = length * invDelta * (-1 * (1 / 2 * (x ** 2 - y ** 2) * gradXp) + x * y * gradYp)
+            gradK2n = length * (-1 * (1 / 2 * (x ** 2 - y ** 2) * gradXp) + x * y * gradYp)
         if ctx.needs_input_grad[12]:
-            gradK1s = length * invDelta * (y * gradXp + x * gradYp)
+            gradK1s = length * (y * gradXp + x * gradYp)
         if ctx.needs_input_grad[13]:
-            gradK2s = length * invDelta * (x * y * gradXp + 1 / 2 * (x ** 2 - y ** 2) * gradYp)
+            gradK2s = length * (x * y * gradXp + 1 / 2 * (x ** 2 - y ** 2) * gradYp)
 
-        return newGradX, gradXp, newGradY, gradYp, gradSigma, gradPSigma, gradDelta, newGradInvDelta, gradVR, gradLength, gradK1n, gradK2n, gradK1s, gradK2s
+        return newGradX, gradXp, newGradY, gradYp, gradSigma, gradPSigma, gradDelta, gradInvDelta, gradVR, gradLength, gradK1n, gradK2n, gradK1s, gradK2s
 
 
 class EdgeKick(torch.autograd.Function):

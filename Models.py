@@ -270,7 +270,7 @@ class Model(nn.Module):
         # add maps to SixTrackLib
         for m in maps:
             if type(m) is Maps.DriftMap:
-                myElem.Drift(length=m.length)
+                myElem.DriftExact(length=m.length)
             elif type(m) is Maps.DipoleKick:
                 k0L = m.weight.item() * m.dipoleLength
 
