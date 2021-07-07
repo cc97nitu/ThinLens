@@ -44,20 +44,9 @@ class Beam(object):
         scaleTril = torch.diag(std ** 2)
         dist = torch.distributions.multivariate_normal.MultivariateNormal(loc, scale_tril=scaleTril)
 
+        # create bunch
         preliminaryBunch = dist.sample((particles,)).double()  # x, xp, y, yp, sigma, totalEnergy
 
-        # calculate missing properties for individual particles
-        pSigma = (preliminaryBunch[:, 5] - self.energy) / (self.beta * self.momentum)
-
-        momentum = torch.sqrt(preliminaryBunch[:, 5] ** 2 - self.mass ** 2)
-
-        delta = (momentum - self.momentum) / self.momentum
-        invDelta = 1 / (delta + 1)
-        gamma = preliminaryBunch[:, 5] / self.mass
-        beta = momentum / (gamma * self.mass)
-        velocityRatio = self.beta / beta
-
-        # create bunch
         x = preliminaryBunch[:, 0]
         xp = preliminaryBunch[:, 1]
         y = preliminaryBunch[:, 2]
@@ -65,6 +54,19 @@ class Beam(object):
         sigma = preliminaryBunch[:, 4]
         energy = preliminaryBunch[:, 5]
 
+        # calculate missing properties for individual particles
+        pSigma = (preliminaryBunch[:, 5] - self.energy) / (self.beta * self.momentum)
+
+        momentum = torch.sqrt(preliminaryBunch[:, 5] ** 2 - self.mass ** 2)
+
+        delta = (momentum - self.momentum) / self.momentum
+        # invDelta = 1 / (delta + 1)
+        invDelta = torch.sqrt((1 + delta)**2 - xp**2 - yp**2)
+        gamma = preliminaryBunch[:, 5] / self.mass
+        beta = momentum / (gamma * self.mass)
+        velocityRatio = self.beta / beta
+
+        # assemble bunch
         self.bunch = torch.stack([x, xp, y, yp, sigma, pSigma, delta, invDelta, velocityRatio, ]).t()
 
         # check if nan occurs in bunch <- can be if sige is too large and hence energy is smaller than rest energy

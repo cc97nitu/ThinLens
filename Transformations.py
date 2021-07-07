@@ -9,9 +9,14 @@ class Drift(torch.autograd.Function):
         ctx.save_for_backward(length, xp, yp, invDelta, vR)
 
         # update phase space coordinates
-        newX = x + length * xp * invDelta
-        newY = y + length * yp * invDelta
-        newSigma = sigma + (1 - vR * (1 + 1/2 * invDelta**2 * (xp**2 + yp**2))) * length
+        # newX = x + length * xp * invDelta
+        newX = x + length * xp / invDelta
+
+        # newY = y + length * yp * invDelta
+        newY = y + length * yp / invDelta
+
+        # newSigma = sigma + (1 - vR * (1 + 1/2 * invDelta**2 * (xp**2 + yp**2))) * length
+        newSigma = sigma + (1 - vR * (1 + delta) / invDelta) * length
 
         return newX, xp, newY, yp, newSigma, pSigma, delta, invDelta, vR
 
@@ -33,36 +38,6 @@ class Drift(torch.autograd.Function):
             gradLength = None
 
         return gradX, newGradXp, gradY, newGradYp, gradSigma, gradPSigma, gradDelta, newGradInvDelta, newGradVR, gradLength
-
-
-class Quadrupole(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x, xp, y, yp, sigma, pSigma, delta, invDelta, vR, length, k1n, k1s):
-        # save inputs for backward pass
-        ctx.save_for_backward(length, k1n, k1s, x, y, invDelta)
-
-        # update momenta
-        newXp = xp - length * invDelta * (k1n * x - k1s * y)
-        newYp = yp + length * invDelta * (k1n * y + k1s * x)
-
-        return x, newXp, y, newYp, sigma, pSigma, delta, invDelta, vR
-
-    @staticmethod
-    def backward(ctx, gradX, gradXp, gradY, gradYp, gradSigma, gradPSigma, gradDelta, gradInvDelta, gradVR):
-        # old phase space
-        length, k1n, k1s, x, y, invDelta = ctx.saved_tensors
-
-        # phase space gradients
-        newGradX = gradX + length * invDelta * (-1 * k1n * gradXp + k1s * gradYp)
-        newGradY = gradY + length * invDelta * (k1s * gradXp + k1n * gradYp)
-        newGradInvDelta = gradInvDelta + length * (-1 * (k1n * x - k1s * y) * gradXp + (k1n * y + k1s * x) * gradYp)
-
-        # weight gradients
-        gradLength = invDelta * (-1 * (k1n * x - k1s * y) * gradXp + (k1n * y + k1s * x) * gradYp)
-        gradK1n = length * invDelta * (-1 * x * gradXp + y * gradYp)
-        gradK1s = length * invDelta * (y * gradXp + x * gradYp)
-
-        return newGradX, gradXp, newGradY, gradYp, gradSigma, gradPSigma, gradDelta, newGradInvDelta, gradVR, gradLength, gradK1n, gradK1s
 
 
 class ThinMultipole(torch.autograd.Function):
@@ -193,22 +168,7 @@ if __name__ == "__main__":
 
     print("check result for Drift: {}".format(checkNew))
 
-    # perform gradcheck for Quadrupole
-    bunch.grad = None
-    bunch.requires_grad_(True)
-
-    paramGrad = True
-    quadLength = torch.tensor(0.1, dtype=torch.double, requires_grad=paramGrad)
-    k1n = torch.tensor(0.5, dtype=torch.double, requires_grad=paramGrad)
-    k1s = torch.tensor(0.5, dtype=torch.double, requires_grad=paramGrad)
-
-    quadMap = Quadrupole.apply
-    inp = tuple([*loseBunch, quadLength, k1n, k1s])
-
-    checkQuad = gradcheck(quadMap, inp, eps=1e-6, atol=1e-4)
-    print("check result for Quadrupole: {}".format(checkQuad))
-
-    # perform gradcheck for Sextupole
+    # perform gradcheck for ThinMultipole
     bunch.grad = None
     bunch.requires_grad_(True)
 
