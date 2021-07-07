@@ -55,19 +55,18 @@ class Beam(object):
         energy = preliminaryBunch[:, 5]
 
         # calculate missing properties for individual particles
-        pSigma = (preliminaryBunch[:, 5] - self.energy) / (self.beta * self.momentum)
+        pSigma = (energy - self.energy) / (self.beta * self.momentum)
 
-        momentum = torch.sqrt(preliminaryBunch[:, 5] ** 2 - self.mass ** 2)
+        momentum = torch.sqrt(energy ** 2 - self.mass ** 2)
 
         delta = (momentum - self.momentum) / self.momentum
-        # invDelta = 1 / (delta + 1)
-        invDelta = torch.sqrt((1 + delta)**2 - xp**2 - yp**2)
-        gamma = preliminaryBunch[:, 5] / self.mass
+        pz = torch.sqrt((1 + delta)**2 - xp**2 - yp**2)
+        gamma = energy / self.mass
         beta = momentum / (gamma * self.mass)
         velocityRatio = self.beta / beta
 
         # assemble bunch
-        self.bunch = torch.stack([x, xp, y, yp, sigma, pSigma, delta, invDelta, velocityRatio, ]).t()
+        self.bunch = torch.stack([x, xp, y, yp, sigma, pSigma, delta, pz, velocityRatio, ]).t()
 
         # check if nan occurs in bunch <- can be if sige is too large and hence energy is smaller than rest energy
         assert not self.bunch.isnan().any()
@@ -76,8 +75,14 @@ class Beam(object):
 
     def fromDelta(self, delta: torch.tensor):
         """Set particle momentum deviation to delta and adjust coordinates accordingly."""
+        if len(delta) > len(self.bunch):
+            raise ValueError("more delta values given than particles")
+
+        px = self.bunch[:len(delta), 1]
+        py = self.bunch[:len(delta), 3]
+
         # calculate properties
-        invDelta = 1 / (delta + 1)
+        pz = torch.sqrt((1 + delta) ** 2 - px ** 2 - py ** 2)
 
         momentum = self.momentum * delta + self.momentum
         energy = torch.sqrt(momentum ** 2 + self.mass ** 2)
@@ -89,7 +94,7 @@ class Beam(object):
 
         # select and update particles
         bunch = self.bunch[:len(delta)].t()
-        bunch = torch.stack([*bunch[:5], pSigma, delta, invDelta, velocityRatio])
+        bunch = torch.stack([*bunch[:5], pSigma, delta, pz, velocityRatio])
         return bunch.t()
 
     def madX(self):
