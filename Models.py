@@ -319,19 +319,20 @@ class Model(nn.Module):
             zeta = bpm.zeta.reshape(-1, len(beam.bunch))
             psigma = bpm.psigma.reshape(-1, len(beam.bunch))
             delta = bpm.delta.reshape(-1, len(beam.bunch))
-            invDelta = bpm.rpp.reshape(-1, len(beam.bunch))
-            velocityRatio = 1 / bpm.rvv.reshape(-1, len(beam.bunch))
+            # invDelta = bpm.rpp.reshape(-1, len(beam.bunch))
+            pz = np.sqrt((1 + delta)**2 - px**2 - py**2)
+            velocityRatio = 1 / bpm.rvv.reshape(-1, len(beam.bunch))  # beta0 / beta
 
             sigma = zeta * velocityRatio  # <=> zeta / (beta0 / beta)
 
-            spatialCoordinates = np.stack([x, px, y, py, sigma, psigma, delta, invDelta, velocityRatio])
+            spatialCoordinates = np.stack([x, px, y, py, sigma, psigma, delta, pz, velocityRatio])
             spatial.append(spatialCoordinates)  # (dim, turn, particle)
 
         spatial = np.stack(spatial)  # bpm, dim, turn, particle
         output = [spatial[:, :, i, :] for i in range(spatial.shape[2])]
         output = np.concatenate(output)  # bpm, dim, particle
 
-        return torch.as_tensor(np.transpose(output, (2, 1, 0)), )  # particle, dim, bpm
+        return torch.as_tensor(np.transpose(output, (2, 1, 0)), ), bpm  # particle, dim, bpm
 
     def getTunes(self) -> list:
         """Calculate tune from one-turn map."""
