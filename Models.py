@@ -529,6 +529,21 @@ class RBendLine(Model):
         return
 
 
+class SBendLine(Model):
+    def __init__(self, angle: float, e1: float, e2: float, slices: int = 1, order: int = 2):
+        super().__init__(slices=slices, order=order)
+
+        # define beam line
+        d1 = Elements.Drift(0.5, **self.generalProperties)
+        rb1 = Elements.SBen(0.1, angle, e1=e1, e2=e2, **self.generalProperties)
+        d2 = Elements.Drift(0.5, **self.generalProperties)
+
+        # beam line
+        self.elements = nn.ModuleList([d1, rb1, d2])
+        self.logElementPositions()
+        return
+
+
 class SIS18_Cell_minimal(Model):
     def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351,
                  k1f_support: typing.Union[None, float] = 0, slices: int = 1,
@@ -948,6 +963,105 @@ class SIS18_Lattice(Model):
         else:
             for i in range(12):
                 cell = SIS18_Cell(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices,
+                                  order=order, quadSliceMultiplicity=quadSliceMultiplicity)
+
+                self.cells.append(cell)
+                beamline += cell.elements
+
+        self.elements = nn.ModuleList(beamline)
+        self.logElementPositions()
+
+        # prepare merged drifts
+        self.mergedMaps = self.mergeDrifts()
+        return
+
+
+class SIS18_Cell_S(Model):
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351,
+                 k1f_support: typing.Union[None, float] = 0, k2f: float = 0, k2d: float = 0, slices: int = 1,
+                 order: int = 2, quadSliceMultiplicity: int = 4):
+        # default values for k1f, k1d correspond to a tune of 4.2, 3.3
+        super().__init__(slices=slices, order=order)
+        self.quadSliceMultiplicity = quadSliceMultiplicity
+
+        # define beam line elements
+        bendingAngle = 0.2617993878
+        rb1a = Elements.SBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
+                             **self.generalProperties)
+        rb1b = Elements.SBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
+                             **self.generalProperties)
+        rb2a = Elements.SBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
+                             **self.generalProperties)
+        rb2b = Elements.SBen(length=2.617993878 / 2, angle=bendingAngle / 2, e1=0, e2=0,
+                             **self.generalProperties)
+
+        # sextupoles
+        ks1c = Elements.Sextupole(length=0.32, k2=k2f, **self.generalProperties)
+        ks3c = Elements.Sextupole(length=0.32, k2=k2d, **self.generalProperties)
+
+        # one day there will be correctors
+        hKick1 = Elements.Dummy(0, **self.generalProperties)
+        hKick2 = Elements.Dummy(0, **self.generalProperties)
+        vKick = Elements.Dummy(0, **self.generalProperties)
+
+        hMon = Elements.Monitor(0.13275, **self.generalProperties)
+        vMonDrift = Elements.Drift(0.13275, **self.generalProperties)
+
+        d1 = Elements.Drift(0.2, **self.generalProperties)
+        d2 = Elements.Drift(0.9700000000000002, **self.generalProperties)
+        d3a = Elements.Drift(6.345, **self.generalProperties)
+        d3b = Elements.Drift(0.175, **self.generalProperties)
+        d4 = Elements.Drift(0.5999999999999979, **self.generalProperties)
+        d5a = Elements.Drift(0.195, **self.generalProperties)
+        d5b = Elements.Drift(0.195, **self.generalProperties)
+        d6a = Elements.Drift(0.3485, **self.generalProperties)
+        d6b = Elements.Drift(0.3308, **self.generalProperties)
+
+        # quadrupoles shall be sliced more due to their strong influence on tunes
+        quadrupoleGeneralProperties = dict(self.generalProperties)
+        quadrupoleGeneralProperties["slices"] = self.generalProperties["slices"] * self.quadSliceMultiplicity
+
+        qs1f = Elements.Quadrupole(length=1.04, k1=k1f, **quadrupoleGeneralProperties)
+        qs2d = Elements.Quadrupole(length=1.04, k1=k1d, **quadrupoleGeneralProperties)
+
+        if k1f_support is not None:
+            qs3t = Elements.Quadrupole(length=0.4804, k1=k1f_support, **quadrupoleGeneralProperties)
+        else:
+            qs3t = Elements.Drift(length=0.4804, **self.generalProperties)
+
+        # set up beam line
+        self.cell = [d1, rb1a, hKick1, rb1b, d2, rb2a, hKick2, rb2b, d3a, ks1c, d3b, qs1f, vKick, d4, qs2d, d5a, ks3c,
+                     d5b,
+                     qs3t, d6a, hMon, vMonDrift, d6b]
+
+        # beam line
+        self.elements = nn.ModuleList(self.cell)
+        self.logElementPositions()
+        return
+
+
+class SIS18_Lattice_S(Model):
+    def __init__(self, k1f: float = 0.3525911342676681, k1d: float = -0.3388671731064351, k1f_support: float = 0,
+                 k2f: float = 0, k2d: float = 0, slices: int = 1, order: int = 2, quadSliceMultiplicity: int = 4,
+                 cellsIdentical: bool = False):
+        # default values for k1f, k1d correspond to a tune of 4.2, 3.3
+        super().__init__(slices=slices, order=order)
+        self.quadSliceMultiplicity = quadSliceMultiplicity
+
+        # SIS18 consists of 12 cells
+        self.cells = list()
+        beamline = list()
+
+        if cellsIdentical:
+            cell = SIS18_Cell_S(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices, order=order,
+                              quadSliceMultiplicity=quadSliceMultiplicity)
+
+            for i in range(12):
+                self.cells.append(cell)
+                beamline += cell.elements
+        else:
+            for i in range(12):
+                cell = SIS18_Cell_S(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices,
                                   order=order, quadSliceMultiplicity=quadSliceMultiplicity)
 
                 self.cells.append(cell)

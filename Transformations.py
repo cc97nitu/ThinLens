@@ -47,8 +47,9 @@ class ThinMultipole(torch.autograd.Function):
         # update momenta
         newXp = px - length * (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
         newYp = py + length * (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
+        newPz = torch.sqrt((1 + delta) ** 2 - newXp**2 - newYp**2)
 
-        return x, newXp, y, newYp, sigma, pSigma, delta, pz, vR
+        return x, newXp, y, newYp, sigma, pSigma, delta, newPz, vR
 
     @staticmethod
     def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
@@ -90,8 +91,9 @@ class EdgeKick(torch.autograd.Function):
         # update momenta
         newXp = px + weight * curvature * torch.sqrt(1 + delta) * x
         newYp = py - weight * curvature * torch.sqrt(1 + delta) * y
+        newPz = torch.sqrt((1 + delta) ** 2 - newXp**2 - newYp**2)
 
-        return x, newXp, y, newYp, sigma, pSigma, delta, pz, vR
+        return x, newXp, y, newYp, sigma, pSigma, delta, newPz, vR
 
     @staticmethod
     def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
@@ -119,10 +121,12 @@ class DipoleKick(torch.autograd.Function):
         ctx.save_for_backward(length, curvature, x, y, delta, vR)
 
         # update coordinates
-        newXp = px + curvature * length * (delta - curvature * x)
+        newPx = px + curvature * length * (delta - curvature * x)
+        newPz = torch.sqrt((1 + delta) ** 2 - newPx**2 - py**2)
+
         newSigma = sigma - curvature * length * vR * x
 
-        return x, newXp, y, py, newSigma, pSigma, delta, pz, vR
+        return x, newPx, y, py, newSigma, pSigma, delta, newPz, vR
 
     @staticmethod
     def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
