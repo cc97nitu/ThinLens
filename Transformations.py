@@ -23,14 +23,16 @@ class Drift(torch.autograd.Function):
         length, px, py, delta, pz, vR = ctx.saved_tensors
 
         # calculate gradients
-        newGradPx = gradPx + length / pz ** 2 * (
-                    (pz + px ** 2 / pz) * gradX + py * px / pz * gradY - vR * (1 + delta) * px / pz * gradSigma)
-        newGradPy = gradPy + length / pz ** 2 * (
-                    py * px / pz * gradX + (pz + py ** 2 / pz) * gradY - vR * (1 + delta) * py / pz * gradSigma)
+        lOpZ2 = length / pz ** 2
+
+        newGradPx = gradPx + lOpZ2 * (
+                (pz + px ** 2 / pz) * gradX + py * px / pz * gradY - vR * (1 + delta) * px / pz * gradSigma)
+        newGradPy = gradPy + lOpZ2 * (
+                py * px / pz * gradX + (pz + py ** 2 / pz) * gradY - vR * (1 + delta) * py / pz * gradSigma)
 
         dPzdDelta = (1 + delta) / pz  # dpz / dDelta
-        newGradDelta = gradDelta - length / pz ** 2 * (
-                    dPzdDelta * (px * gradX + py * gradY) - vR * (pz - (1 + delta) * dPzdDelta) * gradSigma)
+        newGradDelta = gradDelta - lOpZ2 * (
+                dPzdDelta * (px * gradX + py * gradY) - vR * (pz - (1 + delta) * dPzdDelta) * gradSigma)
 
         newGradVR = gradVR - (1 + delta) / pz * length * gradSigma
 
@@ -49,10 +51,10 @@ class ThinMultipole(torch.autograd.Function):
         ctx.save_for_backward(length, k1n, k2n, k1s, k2s, x, y)
 
         # update momenta
-        newXp = px - length * (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
-        newYp = py + length * (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
+        newPx = px - length * (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
+        newPy = py + length * (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
 
-        return x, newXp, y, newYp, sigma, pSigma, delta, pz, vR
+        return x, newPx, y, newPy, sigma, pSigma, delta, pz, vR
 
     @staticmethod
     def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
@@ -66,7 +68,6 @@ class ThinMultipole(torch.autograd.Function):
 
         focX = (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
         focY = (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
-        # newGradInvDelta = gradInvDelta + length * (-1 * focX * gradXp + focY * gradYp)
 
         # weight gradients
         gradLength = gradK1n = gradK2n = gradK1s = gradK2s = None
@@ -92,10 +93,10 @@ class EdgeKick(torch.autograd.Function):
         ctx.save_for_backward(weight, curvature, x, y, torch.sqrt(1 + delta))
 
         # update momenta
-        newXp = px + weight * curvature * x
-        newYp = py - weight * curvature * y
+        newPx = px + weight * curvature * x
+        newPy = py - weight * curvature * y
 
-        return x, newXp, y, newYp, sigma, pSigma, delta, pz, vR
+        return x, newPx, y, newPy, sigma, pSigma, delta, pz, vR
 
     @staticmethod
     def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
