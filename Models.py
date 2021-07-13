@@ -299,9 +299,14 @@ class Model(nn.Module):
 
         return myElem
 
-    def trackWithSTL(self, beam, nTurns, outputAtBPM=True, finalPhaseSpace=False):
+    def trackWithSTL(self, beam, nTurns: int = 1, outputAtBPM: bool = False, elements: typing.Union[None, stl.Elements] = None):
         # track with BPMs
-        elements = self.sixTrackLib(nTurns, installBPMs=outputAtBPM, finalPhaseSpace=finalPhaseSpace)
+        if not elements:
+            if outputAtBPM:
+                elements = self.sixTrackLib(nTurns, installBPMs=True, finalPhaseSpace=False)
+            else:
+                elements = self.sixTrackLib(nTurns, installBPMs=False, finalPhaseSpace=True)
+
         particles = beam.sixTrackLibParticles()
 
         jobBPM = stl.TrackJob(elements, particles, device=None)
@@ -329,7 +334,12 @@ class Model(nn.Module):
         output = [spatial[:, :, i, :] for i in range(spatial.shape[2])]
         output = np.concatenate(output)  # bpm, dim, particle
 
-        return torch.as_tensor(np.transpose(output, (2, 1, 0)), ), bpm  # particle, dim, bpm
+        trackResults = torch.as_tensor(np.transpose(output, (2, 1, 0)), )
+
+        if outputAtBPM:
+            return  trackResults, bpm  # particle, dim, bpm
+        else:
+            return trackResults.squeeze(-1), bpm  # particle, dim
 
     def getTunes(self) -> list:
         """Calculate tune from one-turn map."""
