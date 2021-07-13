@@ -121,7 +121,7 @@ class DipoleKick(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, px, y, py, sigma, pSigma, delta, pz, vR, length, curvature):
         # save inputs for backward pass
-        ctx.save_for_backward(length, curvature, x, y, delta, vR)
+        ctx.save_for_backward(length, curvature, x, delta, vR)
 
         # update coordinates
         newPx = px + curvature * length * (delta - curvature * x)
@@ -133,7 +133,7 @@ class DipoleKick(torch.autograd.Function):
     @staticmethod
     def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
         # old phase space
-        length, curvature, x, y, delta, vR = ctx.saved_tensors
+        length, curvature, x, delta, vR = ctx.saved_tensors
 
         # phase-space gradients
         newGradX = gradX - curvature ** 2 * length * gradPx - curvature * length * vR * gradSigma
