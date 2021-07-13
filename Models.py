@@ -317,15 +317,12 @@ class Model(nn.Module):
             y = bpm.y.reshape(-1, len(beam.bunch))
             py = bpm.py.reshape(-1, len(beam.bunch))
             zeta = bpm.zeta.reshape(-1, len(beam.bunch))
-            psigma = bpm.psigma.reshape(-1, len(beam.bunch))
             delta = bpm.delta.reshape(-1, len(beam.bunch))
-            # invDelta = bpm.rpp.reshape(-1, len(beam.bunch))
-            pz = np.sqrt((1 + delta)**2 - px**2 - py**2)
             velocityRatio = 1 / bpm.rvv.reshape(-1, len(beam.bunch))  # beta0 / beta
 
             sigma = zeta * velocityRatio  # <=> zeta / (beta0 / beta)
 
-            spatialCoordinates = np.stack([x, px, y, py, sigma, psigma, delta, pz, velocityRatio])
+            spatialCoordinates = np.stack([x, px, y, py, sigma, delta, velocityRatio])
             spatial.append(spatialCoordinates)  # (dim, turn, particle)
 
         spatial = np.stack(spatial)  # bpm, dim, turn, particle

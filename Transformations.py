@@ -4,7 +4,7 @@ import torch.autograd
 
 class Drift(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, px, y, py, sigma, pSigma, delta, oldPz, vR, length):
+    def forward(ctx, x, px, y, py, sigma, delta, vR, length):
         # update phase space coordinates
         pz = torch.sqrt((1 + delta) ** 2 - px ** 2 - py ** 2)
 
@@ -15,10 +15,10 @@ class Drift(torch.autograd.Function):
         # save inputs for backward pass
         ctx.save_for_backward(length, px, py, delta, pz, vR)
 
-        return newX, px, newY, py, newSigma, pSigma, delta, oldPz, vR
+        return newX, px, newY, py, newSigma, delta, vR
 
     @staticmethod
-    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradOldPz, gradVR):
+    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradDelta, gradVR):
         # old phase space
         length, px, py, delta, pz, vR = ctx.saved_tensors
 
@@ -36,17 +36,17 @@ class Drift(torch.autograd.Function):
 
         newGradVR = gradVR - (1 + delta) / pz * length * gradSigma
 
-        if ctx.needs_input_grad[9]:
+        if ctx.needs_input_grad[7]:
             gradLength = 1 / pz * (px * gradX + py * gradY) + (1 - vR * (1 + delta) / pz) * gradSigma
         else:
             gradLength = None
 
-        return gradX, newGradPx, gradY, newGradPy, gradSigma, gradPSigma, newGradDelta, gradOldPz, newGradVR, gradLength
+        return gradX, newGradPx, gradY, newGradPy, gradSigma, newGradDelta, newGradVR, gradLength
 
 
 class ThinMultipole(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, px, y, py, sigma, pSigma, delta, pz, vR, length, k1n, k2n, k1s, k2s):
+    def forward(ctx, x, px, y, py, sigma, delta, vR, length, k1n, k2n, k1s, k2s):
         # save inputs for backward pass
         ctx.save_for_backward(length, k1n, k2n, k1s, k2s, x, y)
 
@@ -54,10 +54,10 @@ class ThinMultipole(torch.autograd.Function):
         newPx = px - length * (k1n * x - k1s * y + k2n * 1 / 2 * (x ** 2 - y ** 2) - k2s * x * y)
         newPy = py + length * (k1n * y + k1s * x + k2s * 1 / 2 * (x ** 2 - y ** 2) + k2n * x * y)
 
-        return x, newPx, y, newPy, sigma, pSigma, delta, pz, vR
+        return x, newPx, y, newPy, sigma, delta, vR
 
     @staticmethod
-    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
+    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradDelta, gradVR):
         # old phase space
         length, k1n, k2n, k1s, k2s, x, y = ctx.saved_tensors
 
@@ -72,23 +72,23 @@ class ThinMultipole(torch.autograd.Function):
         # weight gradients
         gradLength = gradK1n = gradK2n = gradK1s = gradK2s = None
 
-        if ctx.needs_input_grad[9]:
+        if ctx.needs_input_grad[7]:
             gradLength = (-1 * focX * gradPx + focY * gradPy)
-        if ctx.needs_input_grad[10]:
+        if ctx.needs_input_grad[8]:
             gradK1n = length * (-1 * (x * gradPx) + y * gradPy)
-        if ctx.needs_input_grad[11]:
+        if ctx.needs_input_grad[9]:
             gradK2n = length * (-1 * (1 / 2 * (x ** 2 - y ** 2) * gradPx) + x * y * gradPy)
-        if ctx.needs_input_grad[12]:
+        if ctx.needs_input_grad[10]:
             gradK1s = length * (y * gradPx + x * gradPy)
-        if ctx.needs_input_grad[13]:
+        if ctx.needs_input_grad[11]:
             gradK2s = length * (x * y * gradPx + 1 / 2 * (x ** 2 - y ** 2) * gradPy)
 
-        return newGradX, gradPx, newGradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR, gradLength, gradK1n, gradK2n, gradK1s, gradK2s
+        return newGradX, gradPx, newGradY, gradPy, gradSigma, gradDelta, gradVR, gradLength, gradK1n, gradK2n, gradK1s, gradK2s
 
 
 class EdgeKick(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, px, y, py, sigma, pSigma, delta, pz, vR, weight, curvature):
+    def forward(ctx, x, px, y, py, sigma, delta, vR, weight, curvature):
         # save inputs for backward pass
         ctx.save_for_backward(weight, curvature, x, y, torch.sqrt(1 + delta))
 
@@ -96,10 +96,10 @@ class EdgeKick(torch.autograd.Function):
         newPx = px + weight * curvature * x
         newPy = py - weight * curvature * y
 
-        return x, newPx, y, newPy, sigma, pSigma, delta, pz, vR
+        return x, newPx, y, newPy, sigma, delta, vR
 
     @staticmethod
-    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
+    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradDelta, gradVR):
         # old phase space
         weight, curvature, x, y, sqrtDelta = ctx.saved_tensors
 
@@ -109,17 +109,17 @@ class EdgeKick(torch.autograd.Function):
         newGradDelta = gradDelta + weight * curvature * 1 / (2 * sqrtDelta) * (x * gradPx - y * gradPy)
 
         # weight gradient
-        if ctx.needs_input_grad[9]:
+        if ctx.needs_input_grad[7]:
             gradWeight = curvature * sqrtDelta * x * gradPx - curvature * sqrtDelta * y * gradPy
         else:
             gradWeight = None
 
-        return newGradX, gradPx, newGradY, gradPy, gradSigma, gradPSigma, newGradDelta, gradPz, gradVR, gradWeight, None
+        return newGradX, gradPx, newGradY, gradPy, gradSigma, newGradDelta, gradVR, gradWeight, None
 
 
 class DipoleKick(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, px, y, py, sigma, pSigma, delta, pz, vR, length, curvature):
+    def forward(ctx, x, px, y, py, sigma, delta, vR, length, curvature):
         # save inputs for backward pass
         ctx.save_for_backward(length, curvature, x, delta, vR)
 
@@ -128,10 +128,10 @@ class DipoleKick(torch.autograd.Function):
 
         newSigma = sigma - curvature * length * vR * x
 
-        return x, newPx, y, py, newSigma, pSigma, delta, pz, vR
+        return x, newPx, y, py, newSigma, delta, vR
 
     @staticmethod
-    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, gradDelta, gradPz, gradVR):
+    def backward(ctx, gradX, gradPx, gradY, gradPy, gradSigma, gradDelta, gradVR):
         # old phase space
         length, curvature, x, delta, vR = ctx.saved_tensors
 
@@ -143,13 +143,13 @@ class DipoleKick(torch.autograd.Function):
         # weight gradients
         gradLength = gradCurvature = None
 
-        if ctx.needs_input_grad[9]:
+        if ctx.needs_input_grad[7]:
             gradLength = curvature * (delta - curvature * x) * gradPx - curvature * vR * x * gradSigma
-        if ctx.needs_input_grad[10]:
+        if ctx.needs_input_grad[8]:
             gradCurvature = (length * (
                     delta - curvature * x) - length * curvature * x) * gradPx - length * vR * x * gradSigma
 
-        return newGradX, gradPx, gradY, gradPy, gradSigma, gradPSigma, newGradDelta, gradPz, newGradVR, gradLength, gradCurvature
+        return newGradX, gradPx, gradY, gradPy, gradSigma, newGradDelta, newGradVR, gradLength, gradCurvature
 
 
 if __name__ == "__main__":
@@ -166,9 +166,9 @@ if __name__ == "__main__":
 
     bunch = beam.bunch.double().requires_grad_(True)
     loseBunch = bunch[:1].transpose(1, 0).unbind(0)
-    inputBunch = [loseBunch[i] for i in range(len(loseBunch))]
-    del inputBunch[7]  # remove pz
-    del inputBunch[5]  # remove psigma
+    # inputBunch = [loseBunch[i] for i in range(len(loseBunch))]
+    # del inputBunch[7]  # remove pz
+    # del inputBunch[5]  # remove psigma
 
     # perform numerical gradcheck for Drift
     length = torch.tensor(3.0, dtype=torch.double, requires_grad=True)

@@ -23,7 +23,6 @@ class Beam(object):
         self.centroid = centroid
 
         self.gamma = self.energy / self.mass
-        # self.momentum = torch.sqrt(torch.tensor(self.energy) ** 2 - torch.tensor(self.mass) ** 2).item()  # GeV/c
         self.momentum = math.sqrt(self.energy ** 2 - self.mass ** 2)  # GeV/c
 
         self.beta = self.momentum / (self.gamma * self.mass)
@@ -55,18 +54,15 @@ class Beam(object):
         energy = preliminaryBunch[:, 5]
 
         # calculate missing properties for individual particles
-        pSigma = (energy - self.energy) / (self.beta * self.momentum)
-
         momentum = torch.sqrt(energy ** 2 - self.mass ** 2)
 
         delta = (momentum - self.momentum) / self.momentum
-        pz = torch.sqrt((1 + delta)**2 - xp**2 - yp**2)
         gamma = energy / self.mass
         beta = momentum / (gamma * self.mass)
         velocityRatio = self.beta / beta
 
         # assemble bunch
-        self.bunch = torch.stack([x, xp, y, yp, sigma, pSigma, delta, pz, velocityRatio, ]).t()
+        self.bunch = torch.stack([x, xp, y, yp, sigma, delta, velocityRatio,]).t()
 
         # check if nan occurs in bunch <- can be if sige is too large and hence energy is smaller than rest energy
         assert not self.bunch.isnan().any()
@@ -78,23 +74,17 @@ class Beam(object):
         if len(delta) > len(self.bunch):
             raise ValueError("more delta values given than particles")
 
-        px = self.bunch[:len(delta), 1]
-        py = self.bunch[:len(delta), 3]
-
         # calculate properties
-        pz = torch.sqrt((1 + delta) ** 2 - px ** 2 - py ** 2)
-
         momentum = self.momentum * delta + self.momentum
         energy = torch.sqrt(momentum ** 2 + self.mass ** 2)
         gamma = energy / self.mass
         beta = momentum / (gamma * self.mass)
 
-        pSigma = (energy - self.energy) / (self.beta * self.momentum)
         velocityRatio = self.beta / beta
 
         # select and update particles
         bunch = self.bunch[:len(delta)].t()
-        bunch = torch.stack([*bunch[:5], pSigma, delta, pz, velocityRatio])
+        bunch = torch.stack([*bunch[:5], delta, velocityRatio])
         return bunch.t()
 
     def madX(self):
@@ -122,7 +112,7 @@ class Beam(object):
 
 
         # apparently this updates other coordinates related to longitudinal momentum too
-        particles.delta = self.bunch[:, 6]
+        particles.delta = self.bunch[:, 5]
 
         return particles
 
