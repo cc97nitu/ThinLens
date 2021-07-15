@@ -257,15 +257,25 @@ class Model(nn.Module):
 
         return maps
 
-    def sixTrackLib(self, numStores: int = 1, installBPMs: bool = True, finalPhaseSpace: bool = False):
+    def sixTrackLib(self, numStores: int = 1, outputPerElement: bool = False, installBPMs: bool = True, finalPhaseSpace: bool = False):
         """Export model to SixTrackLib."""
         myElem = stl.Elements()
 
-        if not installBPMs and not finalPhaseSpace:
-            raise ValueError("no output specified")
+        if not installBPMs and not outputPerElement:
+            finalPhaseSpace = True
 
-        # build map-wise
-        maps = self.mergeDrifts()
+        # get lattice
+        if outputPerElement:
+            maps = list()
+
+            for element in self.elements:
+                for m in element.maps:
+                    maps.append(m)
+
+                maps.append(Model.MonitorDummy())
+        else:
+            # merging drifts reduces rounding errors
+            maps = self.mergeDrifts()
 
         # add maps to SixTrackLib
         for m in maps:
@@ -282,27 +292,31 @@ class Model(nn.Module):
                 k2nl = m.kickLength.item() * m.k2n.item()
                 k1sl = m.kickLength.item() * m.k1s.item()
                 k2sl = m.kickLength.item() * m.k2s.item()
+                k3nl = m.kickLength.item() * m.k3n.item()
+                k3sl = m.kickLength.item() * m.k3s.item()
 
-                knl = [0.0, k1nl, k2nl]
-                ksl = [0.0, k1sl, k2sl]
+                knl = [0.0, k1nl, k2nl, k3nl]
+                ksl = [0.0, k1sl, k2sl, k3sl]
                 myElem.Multipole(knl=knl, ksl=ksl)
             elif type(m) is Model.MonitorDummy:
-                if installBPMs:
+                if outputPerElement or installBPMs:
                     myElem.BeamMonitor(num_stores=numStores)
                 else:
                     continue
             else:
                 raise NotImplementedError()
 
-        if finalPhaseSpace:
+        if finalPhaseSpace and not outputPerElement:
             myElem.BeamMonitor(num_stores=numStores)
 
         return myElem
 
-    def trackWithSTL(self, beam, nTurns: int = 1, outputAtBPM: bool = False, elements: typing.Union[None, stl.Elements] = None):
+    def trackWithSTL(self, beam, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False, elements: typing.Union[None, stl.Elements] = None):
         # track with BPMs
         if not elements:
-            if outputAtBPM:
+            if outputPerElement:
+                elements = self.sixTrackLib(nTurns, outputPerElement=True, installBPMs=False, finalPhaseSpace=False)
+            elif outputAtBPM:
                 elements = self.sixTrackLib(nTurns, installBPMs=True, finalPhaseSpace=False)
             else:
                 elements = self.sixTrackLib(nTurns, installBPMs=False, finalPhaseSpace=True)
@@ -325,7 +339,7 @@ class Model(nn.Module):
             delta = bpm.delta.reshape(-1, len(beam.bunch))
             velocityRatio = 1 / bpm.rvv.reshape(-1, len(beam.bunch))  # beta0 / beta
 
-            sigma = zeta * velocityRatio  # <=> zeta / (beta0 / beta)
+            sigma = zeta / velocityRatio  # <=> zeta / (beta0 / beta)
 
             spatialCoordinates = np.stack([x, px, y, py, sigma, delta, velocityRatio])
             spatial.append(spatialCoordinates)  # (dim, turn, particle)
@@ -336,10 +350,11 @@ class Model(nn.Module):
 
         trackResults = torch.as_tensor(np.transpose(output, (2, 1, 0)), )
 
-        if outputAtBPM:
-            return  trackResults, bpm  # particle, dim, bpm
-        else:
+        if not outputPerElement and not outputAtBPM:
             return trackResults.squeeze(-1), bpm  # particle, dim
+        else:
+            return  trackResults, bpm  # particle, dim, bpm
+
 
     def getTunes(self) -> list:
         """Calculate tune from one-turn map."""
