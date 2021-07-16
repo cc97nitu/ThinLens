@@ -315,7 +315,6 @@ class Model(nn.Module):
 
     def trackWithSTL(self, beam, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False,
                      elements: typing.Union[None, stl.Elements] = None):
-        warnings.warn("hello")
         # track with BPMs
         if not elements:
             if outputPerElement:

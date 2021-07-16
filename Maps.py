@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 import ThinLens.Transformations
+import ThinLens.Cpp_Transformations
 
 
 class Map(nn.Module):
@@ -39,7 +40,8 @@ class DriftMap(Map):
         return
 
     def forward(self, bunch: tuple):
-        return ThinLens.Transformations.Drift.apply(*bunch, self.weight)
+        # return ThinLens.Transformations.Drift.apply(*bunch, self.weight)
+        return ThinLens.Cpp_Transformations.Drift.apply(*bunch, self.weight)
 
     def rMatrix(self):
         rMatrix = torch.eye(6, dtype=torch.double)
