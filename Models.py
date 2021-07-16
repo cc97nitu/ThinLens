@@ -2,6 +2,7 @@ import math
 import json
 import typing
 import collections
+import warnings
 
 import numpy as np
 
@@ -257,7 +258,8 @@ class Model(nn.Module):
 
         return maps
 
-    def sixTrackLib(self, numStores: int = 1, outputPerElement: bool = False, installBPMs: bool = True, finalPhaseSpace: bool = False):
+    def sixTrackLib(self, numStores: int = 1, outputPerElement: bool = False, installBPMs: bool = True,
+                    finalPhaseSpace: bool = False):
         """Export model to SixTrackLib."""
         myElem = stl.Elements()
 
@@ -311,7 +313,9 @@ class Model(nn.Module):
 
         return myElem
 
-    def trackWithSTL(self, beam, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False, elements: typing.Union[None, stl.Elements] = None):
+    def trackWithSTL(self, beam, nTurns: int = 1, outputPerElement: bool = False, outputAtBPM: bool = False,
+                     elements: typing.Union[None, stl.Elements] = None):
+        warnings.warn("hello")
         # track with BPMs
         if not elements:
             if outputPerElement:
@@ -344,6 +348,12 @@ class Model(nn.Module):
             spatialCoordinates = np.stack([x, px, y, py, sigma, delta, velocityRatio])
             spatial.append(spatialCoordinates)  # (dim, turn, particle)
 
+            # warn if there are losses
+            alive = bpm.state.reshape(-1, len(beam.bunch))[-1]
+            if not alive.sum() / len(alive) == 1:
+                warnings.warn("particle loss: {}%".format(100 * (1 - alive.sum() / len(alive)), ))
+                print(alive.sum(), len(alive), type(alive))
+
         spatial = np.stack(spatial)  # bpm, dim, turn, particle
         output = [spatial[:, :, i, :] for i in range(spatial.shape[2])]
         output = np.concatenate(output)  # bpm, dim, particle
@@ -353,8 +363,7 @@ class Model(nn.Module):
         if not outputPerElement and not outputAtBPM:
             return trackResults.squeeze(-1), bpm  # particle, dim
         else:
-            return  trackResults, bpm  # particle, dim, bpm
-
+            return trackResults, bpm  # particle, dim, bpm
 
     def getTunes(self) -> list:
         """Calculate tune from one-turn map."""
@@ -1076,7 +1085,7 @@ class SIS18_Lattice_S(Model):
 
         if cellsIdentical:
             cell = SIS18_Cell_S(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices, order=order,
-                              quadSliceMultiplicity=quadSliceMultiplicity)
+                                quadSliceMultiplicity=quadSliceMultiplicity)
 
             for i in range(12):
                 self.cells.append(cell)
@@ -1084,7 +1093,7 @@ class SIS18_Lattice_S(Model):
         else:
             for i in range(12):
                 cell = SIS18_Cell_S(k1f=k1f, k1d=k1d, k1f_support=k1f_support, k2f=k2f, k2d=k2d, slices=slices,
-                                  order=order, quadSliceMultiplicity=quadSliceMultiplicity)
+                                    order=order, quadSliceMultiplicity=quadSliceMultiplicity)
 
                 self.cells.append(cell)
                 beamline += cell.elements

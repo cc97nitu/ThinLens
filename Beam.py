@@ -1,4 +1,5 @@
 import math
+import typing
 
 import torch
 import torch.distributions
@@ -8,7 +9,8 @@ import sixtracklib as stl
 
 class Beam(object):
     def __init__(self, mass: float, energy: float, exn: float, eyn: float, sigt: float, sige: float, particles: int,
-                 charge: int = 1, centroid: list = (0, 0, 0, 0, 0)):
+                 charge: int = 1, centroid: list = (0, 0, 0, 0, 0),
+                 ex: typing.Union[None, float] = None, ey: typing.Union[None, float] = None):
         """
         Set up beam including bunch of individual particles.
         """
@@ -28,15 +30,26 @@ class Beam(object):
         self.beta = self.momentum / (self.gamma * self.mass)
 
         # standard deviations assuming round beams
-        ex = exn / (self.beta * self.gamma)  # m
-        ey = eyn / (self.beta * self.gamma)  # m
+        warnEmittance = False
+        if not ex:
+            ex = exn / (self.beta * self.gamma)  # m
+        else:
+            warnEmittance = True
 
-        stdX = math.sqrt(ex / math.pi)
-        stdY = math.sqrt(ey / math.pi)
+        if not ey:
+            ey = eyn / (self.beta * self.gamma)  # m
+        else:
+            warnEmittance = True
+
+        if warnEmittance:
+            print("Warning: using geometric emittance, ignoring normalized emittance")
+
+        self.stdX = math.sqrt(ex / math.pi)
+        self.stdY = math.sqrt(ey / math.pi)
 
         stdE = sige * self.energy  # GeV
 
-        std = torch.FloatTensor([stdX, stdX, stdY, stdY, sigt, stdE])
+        std = torch.FloatTensor([self.stdX, self.stdX, self.stdY, self.stdY, sigt, stdE])
 
         # sample particles
         loc = torch.FloatTensor([*centroid, self.energy])
@@ -62,7 +75,7 @@ class Beam(object):
         velocityRatio = self.beta / beta
 
         # assemble bunch
-        self.bunch = torch.stack([x, xp, y, yp, sigma, delta, velocityRatio,]).t()
+        self.bunch = torch.stack([x, xp, y, yp, sigma, delta, velocityRatio, ]).t()
 
         # check if nan occurs in bunch <- can be if sige is too large and hence energy is smaller than rest energy
         assert not self.bunch.isnan().any()
@@ -101,7 +114,7 @@ class Beam(object):
         particles = stl.Particles.from_ref(len(self.bunch), self.momentum, )
 
         # this sets reference momentum, mass and velocity to correct values
-        particles.set_reference(p0c=1e9*self.momentum, mass0=1e9*self.mass)
+        particles.set_reference(p0c=1e9 * self.momentum, mass0=1e9 * self.mass)
 
         # load phase space coordinates
         particles.x = self.bunch[:, 0]
@@ -109,7 +122,6 @@ class Beam(object):
         particles.y = self.bunch[:, 2]
         particles.py = self.bunch[:, 3]
         particles.zeta = self.bunch[:, 4] * self.bunch[:, 6]
-
 
         # apparently this updates other coordinates related to longitudinal momentum too
         particles.delta = self.bunch[:, 5]
@@ -123,4 +135,3 @@ if __name__ == "__main__":
     beam = Beam(mass=18.798, energy=19.0, exn=1.258e-6, eyn=2.005e-6, sigt=0.01, sige=0.005, particles=int(1e1))
 
     print(beam.gamma)
-
