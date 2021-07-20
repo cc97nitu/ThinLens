@@ -1,8 +1,13 @@
 """Implement phase-space transformations as autograd functions."""
+import os
+
 import torch.autograd
 from torch.utils.cpp_extension import load
 
-Transformations_cpp = load(name="Transformations_cpp", sources=["/home/conrad/ThesisWorkspace/Tracking/ThinLens/Transformations.cpp"], verbose=False)
+# load C++ implementation of transformations
+thinLensDir = os.path.dirname(os.path.abspath(__file__))
+sourcePath = os.path.join(thinLensDir, "Transformations.cpp")
+Transformations_cpp = load(name="Transformations_cpp", sources=[sourcePath], verbose=False)
 
 
 class Drift(torch.autograd.Function):
