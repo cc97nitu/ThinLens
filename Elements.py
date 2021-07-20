@@ -104,6 +104,11 @@ class SBen(KickElement):
 
         super().__init__(length=length, kickMap=kickMap, slices=slices, order=order)
 
+        # store properties
+        self.angle = angle
+        self.e1 = e1
+        self.e2 = e2
+
         # edges present?
         if e1:
             self.maps.insert(0, EdgeKick(length, angle, e1))
